@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 
 class SettingsView extends StatelessWidget {
@@ -220,12 +221,19 @@ class SettingsView extends StatelessWidget {
 
                   // 3D Sign Out Button
                   Duo3dRectButton(
-                    onPressed: () {
+                    onPressed: () async {
                       // Perform clean log out back to LoginScreen
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
-                        (route) => false,
-                      );
+                      try {
+                        await AuthService().signOut();
+                      } catch (e) {
+                        debugPrint("Error signing out: $e");
+                      }
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
                     },
                     faceColor: const Color(0xFFFFB020), // Yellow/orange sign out button
                     shadowColor: const Color(0xFFD88900),

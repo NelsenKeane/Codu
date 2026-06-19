@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
 import '../widgets/duo_3d_button.dart';
+import '../services/auth_service.dart';
 import 'main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,6 +16,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isSignIn = true; // Tab state
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
 
   // Controllers
   final TextEditingController _usernameController = TextEditingController();
@@ -50,55 +53,245 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.nunito(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: isError ? AppColors.googleRed : AppColors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Future<void> _handleSignIn() async {
+    final email = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty) {
+      _showSnackBar("Please enter your email address.");
+      return;
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar("Please enter a valid email address.");
+      return;
+    }
+    if (password.isEmpty) {
+      _showSnackBar("Please enter your password.");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await AuthService().signIn(email: email, password: password);
+      if (mounted) {
+        _showSnackBar("Logged in successfully!", isError: false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = "Login failed. Please try again.";
+      if (e.code == 'user-not-found') {
+        errorMessage = "No user found with this email.";
+      } else if (e.code == 'wrong-password') {
+        errorMessage = "Wrong password provided.";
+      } else if (e.code == 'invalid-email') {
+        errorMessage = "The email address is badly formatted.";
+      } else if (e.code == 'user-disabled') {
+        errorMessage = "This user account has been disabled.";
+      } else if (e.code == 'invalid-credential') {
+        errorMessage = "Invalid login credentials.";
+      } else {
+        errorMessage = e.message ?? errorMessage;
+      }
+      if (mounted) {
+        _showSnackBar(errorMessage);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar("An unexpected error occurred: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleSignUp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (name.isEmpty) {
+      _showSnackBar("Please enter your full name.");
+      return;
+    }
+    if (email.isEmpty) {
+      _showSnackBar("Please enter your email address.");
+      return;
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar("Please enter a valid email address.");
+      return;
+    }
+    if (password.isEmpty) {
+      _showSnackBar("Please create a password.");
+      return;
+    }
+    if (password.length < 6) {
+      _showSnackBar("Password must be at least 6 characters long.");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await AuthService().signUp(
+        email: email,
+        password: password,
+        fullName: name,
+      );
+      if (mounted) {
+        _showSnackBar("Account registered successfully!", isError: false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = "Registration failed. Please try again.";
+      if (e.code == 'email-already-in-use') {
+        errorMessage = "The email is already registered.";
+      } else if (e.code == 'invalid-email') {
+        errorMessage = "The email address is invalid.";
+      } else if (e.code == 'weak-password') {
+        errorMessage = "The password provided is too weak.";
+      } else {
+        errorMessage = e.message ?? errorMessage;
+      }
+      if (mounted) {
+        _showSnackBar(errorMessage);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar("An unexpected error occurred: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
     
     return Scaffold(
       backgroundColor: AppColors.skyBlue,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Top Header Area (Sky Blue background with mascot and speech bubble)
-            _buildHeader(statusBarHeight),
-
-            // Tab Bar Area
-            _buildTabs(),
-
-            // Main Card Container (Light Blue background)
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: AppColors.cardBackground,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(32),
-                  topRight: Radius.circular(32),
-                ),
-              ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SingleChildScrollView(
               child: Column(
                 children: [
-                  const SizedBox(height: 28),
-                  // Logo
-                  Image.asset(
-                    'assets/images/codu_logo.png',
-                    height: 56,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Form Fields & Action Buttons
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _isSignIn ? _buildSignInForm() : _buildSignUpForm(),
+                  // Top Header Area (Sky Blue background with mascot and speech bubble)
+                  _buildHeader(statusBarHeight),
+
+                  // Tab Bar Area
+                  _buildTabs(),
+
+                  // Main Card Container (Light Blue background)
+                  Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 28),
+                        // Logo
+                        Image.asset(
+                          'assets/images/codu_logo.png',
+                          height: 56,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Form Fields & Action Buttons
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _isSignIn ? _buildSignInForm() : _buildSignUpForm(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: Center(
+                  child: Card(
+                    color: Colors.white,
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.skyBlue),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "Please wait...",
+                            style: GoogleFonts.nunito(
+                              color: AppColors.textDark,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -386,11 +579,7 @@ class _LoginScreenState extends State<LoginScreen> {
           faceColor: AppColors.yellow,
           shadowColor: AppColors.yellowShadow,
           borderRadius: 25,
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          },
+          onPressed: _handleSignIn,
           child: Text(
             "LOG IN",
             style: GoogleFonts.nunito(
@@ -460,11 +649,7 @@ class _LoginScreenState extends State<LoginScreen> {
           faceColor: AppColors.green,
           shadowColor: AppColors.greenShadow,
           borderRadius: 25,
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          },
+          onPressed: _handleSignUp,
           child: Text(
             "REGISTER",
             style: GoogleFonts.nunito(

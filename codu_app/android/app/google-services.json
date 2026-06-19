@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "122322968688",
+    "project_id": "codu-fa7a7",
+    "storage_bucket": "codu-fa7a7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:122322968688:android:b9f1a89a886062d24294b5",
+        "android_client_info": {
+          "package_name": "com.Assignment2.Codu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPVTGXUhEuoXF5oFuH4dAlc-2hucnFFC8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
