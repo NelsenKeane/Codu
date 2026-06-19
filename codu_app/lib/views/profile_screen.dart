@@ -38,17 +38,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final streak = await UserDataService().getStreak();
     final trophies = await UserDataService().getTrophies();
     final avatarIdx = await UserDataService().getAvatarIndex();
+    // Locally saved name takes priority over Firebase displayName
+    final savedName = await UserDataService().getDisplayName();
 
     String email = user?.email ?? "student@codu.com";
     String localUsername = email.split('@')[0];
 
-    String finalDisplayName = (user?.displayName != null && user!.displayName!.isNotEmpty)
-        ? user.displayName!
-        : localUsername.toUpperCase();
+    String finalDisplayName;
+    if (savedName != null && savedName.isNotEmpty) {
+      finalDisplayName = savedName;
+    } else if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+      finalDisplayName = user.displayName!;
+    } else {
+      finalDisplayName = localUsername;
+    }
 
-    String finalUsername = (user?.displayName != null && user!.displayName!.isNotEmpty)
-        ? "@${user.displayName!.toLowerCase().replaceAll(' ', '_')}"
-        : "@$localUsername";
+    String finalUsername = "@${finalDisplayName.toLowerCase().replaceAll(' ', '_')}";
 
     if (mounted) {
       setState(() {
@@ -60,6 +65,191 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  /// Shows a bottom-sheet style dialog for editing the display name.
+  void _showEditUsernameDialog() {
+    final controller = TextEditingController(text: _displayName);
+    final formKey = GlobalKey<FormState>();
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Edit Username",
+      transitionDuration: const Duration(milliseconds: 250),
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.15),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic)),
+          child: FadeTransition(opacity: anim1, child: child),
+        );
+      },
+      pageBuilder: (ctx, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.88,
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header icon
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF56CCF2).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        color: Color(0xFF56CCF2),
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Edit Username",
+                      style: GoogleFonts.nunito(
+                        color: const Color(0xFF1D3557),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Choose a display name for your profile",
+                      style: GoogleFonts.nunito(
+                        color: Colors.grey.shade500,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    // Text field
+                    TextFormField(
+                      controller: controller,
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.nunito(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: const Color(0xFF1D3557),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Your display name",
+                        hintStyle: GoogleFonts.nunito(color: Colors.grey.shade400),
+                        prefixIcon: const Icon(Icons.person_outline_rounded, color: Color(0xFF56CCF2)),
+                        filled: true,
+                        fillColor: const Color(0xFFF5F5F5),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Color(0xFF56CCF2), width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      ),
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Username cannot be empty';
+                        }
+                        if (val.trim().length < 2) {
+                          return 'Must be at least 2 characters';
+                        }
+                        if (val.trim().length > 24) {
+                          return 'Must be 24 characters or less';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 28),
+                    // Buttons row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(color: Colors.grey.shade300),
+                              ),
+                            ),
+                            child: Text(
+                              "Cancel",
+                              style: GoogleFonts.nunito(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (formKey.currentState!.validate()) {
+                                final newName = controller.text.trim();
+                                Navigator.of(ctx).pop();
+                                await UserDataService().saveDisplayName(newName);
+                                if (mounted) {
+                                  setState(() {
+                                    _displayName = newName;
+                                    _username = "@${newName.toLowerCase().replaceAll(' ', '_')}";
+                                  });
+                                }
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF56CCF2),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              "Save",
+                              style: GoogleFonts.nunito(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showStreakDialog() {
@@ -597,13 +787,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          _username,
-                          style: GoogleFonts.nunito(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
+                        // @username row with pencil edit button
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _username,
+                              style: GoogleFonts.nunito(
+                                color: Colors.white.withValues(alpha: 0.75),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: _showEditUsernameDialog,
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.edit_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 20),
 

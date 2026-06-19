@@ -402,4 +402,26 @@ class UserDataService {
     final String jsonStr = json.encode(lessons);
     await prefs.setString('lessons_$uid', jsonStr);
   }
+
+  // Load custom display name (overrides Firebase displayName)
+  Future<String?> getDisplayName() async {
+    final uid = _uid;
+    if (uid == null) return null;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('display_name_$uid');
+  }
+
+  // Save custom display name locally and to Firebase Auth
+  Future<void> saveDisplayName(String name) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('display_name_$uid', name);
+    // Also push to Firebase so other devices see it
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+    } catch (_) {
+      // If Firebase update fails, local storage is still saved
+    }
+  }
 }
