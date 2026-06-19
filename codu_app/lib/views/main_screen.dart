@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import 'lessons_screen.dart';
+import 'levels_screen.dart';
+import 'leaderboard_screen.dart';
+import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -85,11 +88,7 @@ class _MainScreenState extends State<MainScreen> {
     },
   ];
 
-  @override
-  Widget build(BuildContext context) {
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
-
-    // Filter subjects and history based on search query
+  Widget _buildHomeDashboard(double statusBarHeight) {
     final filteredSubjects = _subjects
         .where((s) => s['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
@@ -98,75 +97,162 @@ class _MainScreenState extends State<MainScreen> {
         .where((h) => h['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.skyBlue,
-      body: Stack(
+    return SingleChildScrollView(
+      child: Column(
         children: [
-          // Main Scrollable Body
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                // Top Header Area (Sky blue, mascot, speech bubble)
-                _buildHeader(statusBarHeight),
+          // Top Header Area (Sky blue, mascot, speech bubble)
+          _buildHeader(statusBarHeight),
 
-                // Content Area (Light Blue Background)
-                Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: AppColors.cardBackground,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(36),
-                      topRight: Radius.circular(36),
+          // Content Area (Light Blue Background)
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(36),
+                topRight: Radius.circular(36),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                // Search bar & Streak Row
+                _buildSearchRow(),
+                const SizedBox(height: 28),
+
+                // Subjects Header
+                _buildSectionHeader(
+                  title: "Subjects",
+                  onViewAll: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const LessonsScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Horizontal Subjects list
+                _buildSubjectsList(filteredSubjects),
+                const SizedBox(height: 28),
+
+                // History Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    "History",
+                    style: GoogleFonts.nunito(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      // Search bar & Streak Row
-                      _buildSearchRow(),
-                      const SizedBox(height: 28),
-
-                      // Subjects Header
-                      _buildSectionHeader(
-                        title: "Subjects",
-                        onViewAll: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (context) => const LessonsScreen()),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Horizontal Subjects list
-                      _buildSubjectsList(filteredSubjects),
-                      const SizedBox(height: 28),
-
-                      // History Header
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text(
-                          "History",
-                          style: GoogleFonts.nunito(
-                            color: Colors.black,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 22,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Grid-like History cards
-                      _buildHistoryCards(filteredHistory),
-                      
-                      // Extra padding for the floating navigation bar
-                      const SizedBox(height: 110),
-                    ],
-                  ),
                 ),
+                const SizedBox(height: 16),
+
+                // Grid-like History cards
+                _buildHistoryCards(filteredHistory),
+                
+                // Extra padding for the floating navigation bar
+                const SizedBox(height: 110),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderScreen({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required String message,
+  }) {
+    return Container(
+      color: AppColors.cardBackground,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                title,
+                style: GoogleFonts.nunito(
+                  color: AppColors.textDark,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.nunito(
+                  color: AppColors.textGrey,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
+    Widget bodyContent;
+    switch (_selectedNavIndex) {
+      case 0:
+        bodyContent = _buildHomeDashboard(statusBarHeight);
+        break;
+      case 1:
+        bodyContent = const LevelsScreen();
+        break;
+      case 2:
+        bodyContent = _buildPlaceholderScreen(
+          title: "Explore",
+          icon: Icons.public_rounded,
+          color: Colors.teal,
+          message: "Connect and share your coding journey with users worldwide!",
+        );
+        break;
+      case 3:
+        bodyContent = const LeaderboardScreen();
+        break;
+      case 4:
+        bodyContent = const ProfileScreen();
+        break;
+      default:
+        bodyContent = _buildHomeDashboard(statusBarHeight);
+    }
+
+    return Scaffold(
+      backgroundColor: _selectedNavIndex == 1 ? const Color(0xFF56CCF2) : AppColors.skyBlue,
+      body: Stack(
+        children: [
+          // Screen Body Content
+          Positioned.fill(child: bodyContent),
 
           // Floating Bottom Navigation Bar
           Positioned(
@@ -793,7 +879,7 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           _buildNavItem(0, Icons.home_rounded, Colors.orange),
           _buildNavItem(1, Icons.menu_book_rounded, Colors.blue),
-          _buildNavItem(2, Icons.public_rounded, Colors.teal),
+          _buildNavItem(2, Icons.sports_esports_rounded, Colors.teal),
           _buildNavItem(3, Icons.emoji_events_rounded, Colors.orangeAccent),
           _buildNavItem(4, Icons.person_rounded, Colors.purple),
         ],
