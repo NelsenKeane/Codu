@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/duo_3d_button.dart';
 import '../services/auth_service.dart';
 import 'main_screen.dart';
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,19 +17,22 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isSignIn = true; // Tab state
   bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
 
   // Controllers
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController(); // Sign-in email
+  final TextEditingController _emailController = TextEditingController();    // Sign-up email
+  final TextEditingController _signUpUsernameController = TextEditingController(); // Sign-up username
+  final TextEditingController _passwordController = TextEditingController(); // Password
+  final TextEditingController _confirmPasswordController = TextEditingController(); // Confirm password
 
   // Focus nodes to track active states
   final FocusNode _usernameFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
+  final FocusNode _signUpUsernameFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _confirmPasswordFocus = FocusNode();
 
   @override
   void initState() {
@@ -36,20 +40,23 @@ class _LoginScreenState extends State<LoginScreen> {
     // Rebuild when focus changes to update active borders
     _usernameFocus.addListener(() => setState(() {}));
     _emailFocus.addListener(() => setState(() {}));
+    _signUpUsernameFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
-    _nameFocus.addListener(() => setState(() {}));
+    _confirmPasswordFocus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _emailController.dispose();
+    _signUpUsernameController.dispose();
     _passwordController.dispose();
-    _nameController.dispose();
+    _confirmPasswordController.dispose();
     _usernameFocus.dispose();
     _emailFocus.dispose();
+    _signUpUsernameFocus.dispose();
     _passwordFocus.dispose();
-    _nameFocus.dispose();
+    _confirmPasswordFocus.dispose();
     super.dispose();
   }
 
@@ -134,14 +141,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleSignUp() async {
-    final name = _nameController.text.trim();
+    final username = _signUpUsernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (name.isEmpty) {
-      _showSnackBar("Please enter your full name.");
-      return;
-    }
     if (email.isEmpty) {
       _showSnackBar("Please enter your email address.");
       return;
@@ -150,12 +154,20 @@ class _LoginScreenState extends State<LoginScreen> {
       _showSnackBar("Please enter a valid email address.");
       return;
     }
+    if (username.isEmpty) {
+      _showSnackBar("Please enter a username.");
+      return;
+    }
     if (password.isEmpty) {
       _showSnackBar("Please create a password.");
       return;
     }
     if (password.length < 6) {
       _showSnackBar("Password must be at least 6 characters long.");
+      return;
+    }
+    if (password != confirmPassword) {
+      _showSnackBar("Passwords do not match.");
       return;
     }
 
@@ -167,12 +179,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await AuthService().signUp(
         email: email,
         password: password,
-        fullName: name,
+        fullName: username,
       );
       if (mounted) {
-        _showSnackBar("Account registered successfully!", isError: false);
+        _showSnackBar("Verification email sent!", isError: false);
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+          MaterialPageRoute(
+            builder: (context) => EmailVerificationScreen(email: email),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -411,7 +425,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Center(
                     child: Text(
-                      _isSignIn ? "Welcome Back !" : "Join the fun!",
+                      _isSignIn ? "Welcome Back !" : "Lets Get Started !",
                       style: GoogleFonts.nunito(
                         color: Colors.black,
                         fontWeight: FontWeight.w900,
@@ -614,22 +628,22 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildInputField(
-                controller: _nameController,
-                hintText: "Full Name",
-                prefixIcon: Icons.person_outline,
-                focusNode: _nameFocus,
-              ),
-              const SizedBox(height: 16),
-              _buildInputField(
                 controller: _emailController,
-                hintText: "Email address",
-                prefixIcon: Icons.email_outlined,
+                hintText: "Email Address",
+                prefixIcon: Icons.person_outline,
                 focusNode: _emailFocus,
               ),
               const SizedBox(height: 16),
               _buildInputField(
+                controller: _signUpUsernameController,
+                hintText: "Username",
+                prefixIcon: Icons.person_outline,
+                focusNode: _signUpUsernameFocus,
+              ),
+              const SizedBox(height: 16),
+              _buildInputField(
                 controller: _passwordController,
-                hintText: "Create Password",
+                hintText: "Password",
                 prefixIcon: Icons.lock_outline,
                 isPassword: true,
                 isPasswordVisible: _isPasswordVisible,
@@ -640,14 +654,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   });
                 },
               ),
+              const SizedBox(height: 16),
+              _buildInputField(
+                controller: _confirmPasswordController,
+                hintText: "Confirm Password",
+                prefixIcon: Icons.lock_outline,
+                isPassword: true,
+                isPasswordVisible: _isConfirmPasswordVisible,
+                focusNode: _confirmPasswordFocus,
+                onToggleVisibility: () {
+                  setState(() {
+                    _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                  });
+                },
+              ),
             ],
           ),
         ),
         const SizedBox(height: 24),
         // 3D REGISTER Button
         Duo3dButton(
-          faceColor: AppColors.green,
-          shadowColor: AppColors.greenShadow,
+          faceColor: AppColors.yellow,
+          shadowColor: AppColors.yellowShadow,
           borderRadius: 25,
           onPressed: _handleSignUp,
           child: Text(
@@ -700,7 +728,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ? Padding(
                 padding: const EdgeInsets.only(left: 20.0, right: 12.0),
                 child: Icon(
-                  prefixIcon,
+                   prefixIcon,
                   color: AppColors.textGrey,
                   size: 20,
                 ),
@@ -720,8 +748,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(30),
-          borderSide: BorderSide(
-            color: _isSignIn ? AppColors.yellow : AppColors.green,
+          borderSide: const BorderSide(
+            color: AppColors.yellow,
             width: 1.5,
           ),
         ),
@@ -741,7 +769,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Divider row ("Login With")
+  // Divider row ("Login With" / "Sign Up With")
   Widget _buildDivider() {
     return Row(
       children: [
@@ -754,7 +782,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            "Login With",
+            _isSignIn ? "Login With" : "Sign Up With",
             style: GoogleFonts.nunito(
               color: Colors.black.withValues(alpha: 0.6),
               fontSize: 14,
