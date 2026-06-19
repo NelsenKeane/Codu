@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
@@ -225,17 +226,28 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Top Header Area (Sky Blue background with mascot and speech bubble)
-                  _buildHeader(statusBarHeight),
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      // Top Header Area (Sky Blue background with mascot and speech bubble)
+                      _buildHeader(statusBarHeight),
 
-                  // Tab Bar Area
-                  _buildTabs(),
-
-                  // Main Card Container (Light Blue background)
-                  Container(
+                      // Tab Bar Area
+                      _buildTabs(),
+                    ],
+                  ),
+                ),
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Container(
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       color: AppColors.cardBackground,
@@ -266,8 +278,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           if (_isLoading)
@@ -315,35 +327,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Decorative Speech Bubble Silhouettes (Lighter sky blue)
-        Positioned(
-          top: statusBarHeight - 10,
-          right: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 110,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          top: statusBarHeight + 35,
-          left: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 90,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 5,
-          right: 35,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 70,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        
         // Header Content
         Padding(
           padding: EdgeInsets.only(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_service.dart';
@@ -108,11 +109,15 @@ class SettingsView extends StatelessWidget {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2), // Vibrant sky blue from mockup
+      backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
         children: [
-          // 1. Background Silhouettes
-          _buildBackgroundDecor(statusBarHeight),
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
 
           // 2. Top Header (Back Chevron & Title)
           Positioned(
@@ -258,30 +263,7 @@ class SettingsView extends StatelessWidget {
 
   // Floating background silhouettes for premium look
   Widget _buildBackgroundDecor(double statusBarHeight) {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          Positioned(
-            top: statusBarHeight + 10,
-            left: 20,
-            child: Icon(
-              Icons.code_rounded,
-              size: 80,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned(
-            top: statusBarHeight + 50,
-            right: 40,
-            child: Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 90,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 

@@ -16,15 +16,15 @@ void main() {
 
     // Verify that the login screen starts with "Welcome Back !" in the speech bubble.
     expect(find.text('Welcome Back !'), findsOneWidget);
-    expect(find.text('Join the fun!'), findsNothing);
+    expect(find.text('Lets Get Started !'), findsNothing);
 
     // Tap the 'REGISTER' tab and trigger a frame.
     await tester.tap(find.text('REGISTER'));
     await tester.pumpAndSettle();
 
-    // Verify that the speech bubble updates to "Join the fun!".
+    // Verify that the speech bubble updates to "Lets Get Started !".
     expect(find.text('Welcome Back !'), findsNothing);
-    expect(find.text('Join the fun!'), findsOneWidget);
+    expect(find.text('Lets Get Started !'), findsOneWidget);
 
     // Tap the 'LOG IN' tab and trigger a frame.
     await tester.tap(find.text('LOG IN'));
@@ -32,7 +32,7 @@ void main() {
 
     // Verify that the speech bubble resets to "Welcome Back !".
     expect(find.text('Welcome Back !'), findsOneWidget);
-    expect(find.text('Join the fun!'), findsNothing);
+    expect(find.text('Lets Get Started !'), findsNothing);
   });
 }
 

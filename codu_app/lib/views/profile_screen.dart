@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
+import '../services/user_data_service.dart';
 import 'settings_screen.dart';
 import 'add_friend_screen.dart';
 import 'friend_list_screen.dart';
@@ -17,6 +20,301 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _showSettings = false;
   bool _showAddFriend = false;
   bool _showFriendList = false;
+
+  String _displayName = "Codu Student";
+  String _username = "@codu_student";
+  int _streak = 0;
+  int _trophies = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final streak = await UserDataService().getStreak();
+    final trophies = await UserDataService().getTrophies();
+    final avatarIdx = await UserDataService().getAvatarIndex();
+
+    String email = user?.email ?? "student@codu.com";
+    String localUsername = email.split('@')[0];
+
+    String finalDisplayName = (user?.displayName != null && user!.displayName!.isNotEmpty)
+        ? user.displayName!
+        : localUsername.toUpperCase();
+
+    String finalUsername = (user?.displayName != null && user!.displayName!.isNotEmpty)
+        ? "@${user.displayName!.toLowerCase().replaceAll(' ', '_')}"
+        : "@$localUsername";
+
+    if (mounted) {
+      setState(() {
+        _streak = streak;
+        _trophies = trophies;
+        _avatarIndex = avatarIdx;
+        _displayName = finalDisplayName;
+        _username = finalUsername;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showStreakDialog() {
+    final TextEditingController controller = TextEditingController(text: _streak.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Streak",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Streak Count",
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFF1D83B5),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1D83B5),
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newStreak = int.tryParse(controller.text);
+                          if (newStreak != null && newStreak >= 0) {
+                            await UserDataService().saveStreak(newStreak);
+                            _loadProfileData();
+                          }
+                          if (mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTrophiesDialog() {
+    final TextEditingController controller = TextEditingController(text: _trophies.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Trophies",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Trophies Count",
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFF1D83B5),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1D83B5),
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newTrophies = int.tryParse(controller.text);
+                          if (newTrophies != null && newTrophies >= 0) {
+                            await UserDataService().saveTrophies(newTrophies);
+                            _loadProfileData();
+                          }
+                          if (mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   // List of interactive avatars the user can choose from in the popup
   final List<Map<String, dynamic>> _avatars = [
@@ -127,10 +425,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final avatar = _avatars[index];
     final bool isSelected = _avatarIndex == index;
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         setState(() {
           _avatarIndex = index;
         });
+        await UserDataService().saveAvatarIndex(index);
+        _loadProfileData();
         Navigator.of(context).pop();
       },
       child: Container(
@@ -173,308 +473,277 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onBack: () => setState(() => _showAddFriend = false),
       );
     }
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
     final Map<String, dynamic> activeAvatar = _avatars[_avatarIndex];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2), // Premium sky blue header
+      backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
         children: [
-          // 1. Background Silhouettes
-          _buildBackgroundDecor(statusBarHeight),
-
-          // 2. Settings Cog Button (Top Right)
-          Positioned(
-            top: statusBarHeight + 16,
-            right: 24,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.25),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.settings_rounded, color: Colors.white, size: 24),
-                onPressed: () {
-                  setState(() {
-                    _showSettings = true;
-                  });
-                },
-              ),
+          // SVG mascot background
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
             ),
           ),
 
-          // 3. Title Profile (Centered at top)
-          Positioned(
-            top: statusBarHeight + 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                "Profile",
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 26,
-                ),
-              ),
-            ),
-          ),
-
-          // 4. Main Scrollable Content
-          Positioned(
-            top: statusBarHeight + 80,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 110),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-
-                  // Avatar Circle with dynamic edit button
-                  Stack(
+          // Main content (always visible)
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Header row: title + settings button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Stack(
                     alignment: Alignment.center,
-                    clipBehavior: Clip.none,
                     children: [
-                      Container(
-                        width: 145,
-                        height: 145,
-                        decoration: BoxDecoration(
-                          color: activeAvatar['bgColor'],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          activeAvatar['emoji'],
-                          style: const TextStyle(fontSize: 84),
+                      Text(
+                        "Profile",
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 26,
                         ),
                       ),
-                      // Refresh / Edit Button overlay at bottom right
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: _showAvatarSelectorDialog,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFFB020), // Yellow/orange edit badge
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.sync_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.settings_rounded, color: Colors.white, size: 24),
+                            onPressed: () => setState(() => _showSettings = true),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                ),
 
-                  // Name & Username
-                  Text(
-                    "Alex Morgan",
-                    style: GoogleFonts.nunito(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 24,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "@alex_morgan",
-                    style: GoogleFonts.nunito(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 3D Friend List Button
-                  Duo3dRectButton(
-                    onPressed: () {
-                      setState(() {
-                        _showFriendList = true;
-                      });
-                    },
-                    faceColor: const Color(0xFFFFB020), // Gold/orange button color
-                    shadowColor: const Color(0xFFD88900),
-                    child: Text(
-                      "Friend List",
-                      style: GoogleFonts.nunito(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // White Card Container for Overview & Badges
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(32),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(24),
+                // Scrollable body content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 120),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Overview Title
-                        Text(
-                          "Overview",
-                          style: GoogleFonts.nunito(
-                            color: AppColors.textDark,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
-                        // Overview Row
-                        Row(
+                        // Avatar Circle with edit button
+                        Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
                           children: [
-                            // Streak Capsule
-                            Expanded(
-                              child: Container(
-                                height: 58,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE8F8E9), // Soft green
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Row(
-                                  children: [
-                                    const Text(
-                                      "🔥",
-                                      style: TextStyle(fontSize: 24),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      "20 days",
-                                      style: GoogleFonts.nunito(
-                                        color: AppColors.textDark,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 14,
+                            Container(
+                              width: 145,
+                              height: 145,
+                              decoration: BoxDecoration(
+                                color: activeAvatar['bgColor'],
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                activeAvatar['emoji'],
+                                style: const TextStyle(fontSize: 84),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: _showAvatarSelectorDialog,
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFFB020),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.sync_rounded, color: Colors.white, size: 20),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            // Trophy Capsule
-                            Expanded(
-                              child: Container(
-                                height: 58,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF3E8FA), // Soft purple
-                                  borderRadius: BorderRadius.circular(18),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Name & Username
+                        Text(
+                          _displayName,
+                          style: GoogleFonts.nunito(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _username,
+                          style: GoogleFonts.nunito(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Friend List Button
+                        Duo3dRectButton(
+                          onPressed: () => setState(() => _showFriendList = true),
+                          faceColor: const Color(0xFFFFB020),
+                          shadowColor: const Color(0xFFD88900),
+                          child: Text(
+                            "Friend List",
+                            style: GoogleFonts.nunito(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        // White Card: Overview & Badges
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(32),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Overview",
+                                style: GoogleFonts.nunito(
+                                  color: AppColors.textDark,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 20,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Row(
-                                  children: [
-                                    const Text(
-                                      "🏆",
-                                      style: TextStyle(fontSize: 24),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        "150 Trophies",
-                                        style: GoogleFonts.nunito(
-                                          color: AppColors.textDark,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 13,
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: _showStreakDialog,
+                                      child: Container(
+                                        height: 58,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE8F8E9),
+                                          borderRadius: BorderRadius.circular(18),
                                         ),
-                                        overflow: TextOverflow.ellipsis,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        child: Row(
+                                          children: [
+                                            const Text("🔥", style: TextStyle(fontSize: 24)),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              "$_streak days",
+                                              style: GoogleFonts.nunito(
+                                                color: AppColors.textDark,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: _showTrophiesDialog,
+                                      child: Container(
+                                        height: 58,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3E8FA),
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        child: Row(
+                                          children: [
+                                            const Text("🏆", style: TextStyle(fontSize: 24)),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                "$_trophies Trophies",
+                                                style: GoogleFonts.nunito(
+                                                  color: AppColors.textDark,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+                              Text(
+                                "Badges",
+                                style: GoogleFonts.nunito(
+                                  color: AppColors.textDark,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 20,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Badges Title
-                        Text(
-                          "Badges",
-                          style: GoogleFonts.nunito(
-                            color: AppColors.textDark,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  BadgeShield(emoji: "🏹", fillColor: const Color(0xFFFFD56B), borderColor: const Color(0xFFE5A93B)),
+                                  BadgeShield(emoji: "🪶", fillColor: const Color(0xFF7A9EFF), borderColor: const Color(0xFF5672E5)),
+                                  BadgeShield(emoji: "🌿", fillColor: const Color(0xFF8CEEAD), borderColor: const Color(0xFF339320)),
+                                  BadgeShield(emoji: "🔑", fillColor: const Color(0xFFBDBDBD), borderColor: const Color(0xFF757575)),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Badges row of Shield shapes
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            BadgeShield(
-                              emoji: "🏹",
-                              fillColor: const Color(0xFFFFD56B), // Golden Yellow
-                              borderColor: const Color(0xFFE5A93B),
-                            ),
-                            BadgeShield(
-                              emoji: "🪶",
-                              fillColor: const Color(0xFF7A9EFF), // Sky Blue
-                              borderColor: const Color(0xFF5672E5),
-                            ),
-                            BadgeShield(
-                              emoji: "🌿",
-                              fillColor: const Color(0xFF8CEEAD), // Wood Green
-                              borderColor: const Color(0xFF339320),
-                            ),
-                            BadgeShield(
-                              emoji: "🔑",
-                              fillColor: const Color(0xFFBDBDBD), // Silver
-                              borderColor: const Color(0xFF757575),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
-          // 5. Slide-down Friend List Overlay
+          // Slide-down Friend List Overlay
           AnimatedPositioned(
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeInOutQuad,
@@ -499,39 +768,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Floating background silhouettes for premium look
   Widget _buildBackgroundDecor(double statusBarHeight) {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          Positioned(
-            top: statusBarHeight + 120,
-            left: -15,
-            child: Icon(
-              Icons.code_rounded,
-              size: 80,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned(
-            top: statusBarHeight + 320,
-            right: -15,
-            child: Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 90,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned(
-            top: statusBarHeight + 500,
-            left: 20,
-            child: Icon(
-              Icons.menu_book_rounded,
-              size: 70,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 
@@ -69,12 +70,15 @@ class _AddFriendViewState extends State<AddFriendView> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2), // Premium sky blue
+      backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
         children: [
-          // 1. Background Silhouettes
-          _buildBackgroundDecor(statusBarHeight),
-
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
           // 2. Top Header (Back Chevron & Title)
           Positioned(
             top: statusBarHeight + 16,
@@ -180,30 +184,7 @@ class _AddFriendViewState extends State<AddFriendView> {
 
   // Floating background silhouettes for premium look
   Widget _buildBackgroundDecor(double statusBarHeight) {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          Positioned(
-            top: statusBarHeight + 10,
-            left: 20,
-            child: Icon(
-              Icons.code_rounded,
-              size: 80,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned(
-            top: statusBarHeight + 50,
-            right: 40,
-            child: Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 90,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   // Rounded search bar input

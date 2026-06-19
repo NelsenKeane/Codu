@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/user_data_service.dart';
 
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
@@ -13,6 +14,282 @@ class _LevelsScreenState extends State<LevelsScreen> {
   String _selectedSubject = 'Phyton'; // Mockup spelling
 
   final List<String> _subjects = ['Phyton', 'C++', 'Javascript', 'Java'];
+
+  int _streak = 0;
+  int _trophies = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final streak = await UserDataService().getStreak();
+    final trophies = await UserDataService().getTrophies();
+    if (mounted) {
+      setState(() {
+        _streak = streak;
+        _trophies = trophies;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showStreakDialog() {
+    final TextEditingController controller = TextEditingController(text: _streak.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Streak",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Streak Count",
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFF1D83B5),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1D83B5),
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newStreak = int.tryParse(controller.text);
+                          if (newStreak != null && newStreak >= 0) {
+                            await UserDataService().saveStreak(newStreak);
+                            _loadUserData();
+                          }
+                          if (mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTrophiesDialog() {
+    final TextEditingController controller = TextEditingController(text: _trophies.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Trophies",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Trophies Count",
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFF1D83B5),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1D83B5),
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newTrophies = int.tryParse(controller.text);
+                          if (newTrophies != null && newTrophies >= 0) {
+                            await UserDataService().saveTrophies(newTrophies);
+                            _loadUserData();
+                          }
+                          if (mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   // Map subjects to emojis for the dropdown
   String _getSubjectEmoji(String subject) {
@@ -255,71 +532,77 @@ class _LevelsScreenState extends State<LevelsScreen> {
     return Row(
       children: [
         // Streak / Fire Capsule
-        Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF3F4D59), // Dark slate background
-            borderRadius: BorderRadius.circular(19),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Text(
-                "🔥",
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                "20",
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
+        GestureDetector(
+          onTap: _showStreakDialog,
+          child: Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3F4D59), // Dark slate background
+              borderRadius: BorderRadius.circular(19),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  "🔥",
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "$_streak",
+                  style: GoogleFonts.nunito(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: 8),
         // Star Capsule
-        Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF3F4D59),
-            borderRadius: BorderRadius.circular(19),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.star_rounded,
-                color: Color(0xFFFFD56B), // Golden yellow star
-                size: 20,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                "5",
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
+        GestureDetector(
+          onTap: _showTrophiesDialog,
+          child: Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3F4D59),
+              borderRadius: BorderRadius.circular(19),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFFFD56B), // Golden yellow star
+                  size: 20,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "$_trophies",
+                  style: GoogleFonts.nunito(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

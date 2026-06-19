@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/user_data_service.dart';
 import 'lessons_screen.dart';
 import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
@@ -18,75 +20,164 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
+  int _streak = 0;
+  List<Map<String, dynamic>> _subjects = [];
+  List<Map<String, dynamic>> _history = [];
+  bool _isLoadingData = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    await UserDataService().trackAppOpen();
+    final streak = await UserDataService().getStreak();
+    final subjects = await UserDataService().getSubjects();
+    final history = await UserDataService().getHistory();
+    if (mounted) {
+      setState(() {
+        _streak = streak;
+        _subjects = subjects;
+        _history = history;
+        _isLoadingData = false;
+      });
+    }
+  }
+
+  void _showStreakDialog() {
+    final TextEditingController controller = TextEditingController(text: _streak.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Streak",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Streak Count",
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: AppColors.textGrey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textDark,
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: AppColors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: AppColors.textGrey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newStreak = int.tryParse(controller.text);
+                          if (newStreak != null && newStreak >= 0) {
+                            await UserDataService().saveStreak(newStreak);
+                            _loadUserData();
+                          }
+                          if (mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
-
-  // Subjects data
-  final List<Map<String, dynamic>> _subjects = [
-    {
-      'title': 'Introduction to Python',
-      'lessons': 54,
-      'color1': Color(0xFF8F93EA),
-      'color2': Color(0xFF7076E3),
-      'lang': 'Python',
-    },
-    {
-      'title': 'Introduction to C++',
-      'lessons': 59,
-      'color1': Color(0xFF7A9EFF),
-      'color2': Color(0xFF5672E5),
-      'lang': 'C++',
-    },
-    {
-      'title': 'Introduction to Javascript',
-      'lessons': 54,
-      'color1': Color(0xFFFFD56B),
-      'color2': Color(0xFFE5A93B),
-      'lang': 'Javascript',
-    },
-    {
-      'title': 'Introduction to Java',
-      'lessons': 64,
-      'color1': Color(0xFFFF8B8B),
-      'color2': Color(0xFFE55353),
-      'lang': 'Java',
-    },
-  ];
-
-  // History progress data
-  final List<Map<String, dynamic>> _history = [
-    {
-      'title': 'Introduction to Python',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
-      'lang': 'Python',
-    },
-    {
-      'title': 'Introduction to C++',
-      'lessons': 59,
-      'completed': 59,
-      'status': 'Completed',
-      'lang': 'C++',
-    },
-    {
-      'title': 'Introduction to Javascript',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
-      'lang': 'Javascript',
-    },
-    {
-      'title': 'Introduction to Java',
-      'lessons': 64,
-      'completed': 64,
-      'status': 'Completed',
-      'lang': 'Java',
-    },
-  ];
 
   Widget _buildHomeDashboard(double statusBarHeight) {
     final filteredSubjects = _subjects
@@ -97,14 +188,19 @@ class _MainScreenState extends State<MainScreen> {
         .where((h) => h['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Top Header Area (Sky blue, mascot, speech bubble)
-          _buildHeader(statusBarHeight),
-
-          // Content Area (Light Blue Background)
-          Container(
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              // Top Header Area (Sky blue, mascot, speech bubble)
+              _buildHeader(statusBarHeight),
+            ],
+          ),
+        ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(
               color: AppColors.cardBackground,
@@ -124,10 +220,11 @@ class _MainScreenState extends State<MainScreen> {
                 // Subjects Header
                 _buildSectionHeader(
                   title: "Subjects",
-                  onViewAll: () {
-                    Navigator.of(context).push(
+                  onViewAll: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(builder: (context) => const LessonsScreen()),
                     );
+                    _loadUserData();
                   },
                 ),
                 const SizedBox(height: 16),
@@ -158,8 +255,8 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -248,9 +345,17 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return Scaffold(
-      backgroundColor: _selectedNavIndex == 1 ? const Color(0xFF56CCF2) : AppColors.skyBlue,
+      backgroundColor: AppColors.skyBlue,
       body: Stack(
         children: [
+          // SVG background for tabs that don't have their own (home, explore, leaderboard)
+          if (_selectedNavIndex != 1 && _selectedNavIndex != 4)
+            Positioned.fill(
+              child: SvgPicture.asset(
+                'assets/images/codu_background_pattern_mobile_soft.svg',
+                fit: BoxFit.cover,
+              ),
+            ),
           // Screen Body Content
           Positioned.fill(child: bodyContent),
 
@@ -271,44 +376,6 @@ class _MainScreenState extends State<MainScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Decorative Speech Bubble Silhouettes (Lighter sky blue)
-        Positioned(
-          top: statusBarHeight - 10,
-          right: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 110,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          top: statusBarHeight + 35,
-          left: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 90,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 5,
-          right: 35,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 70,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 20,
-          left: 100,
-          child: Icon(
-            Icons.code_rounded,
-            size: 40,
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-
         // Header Content
         Padding(
           padding: EdgeInsets.only(
@@ -484,29 +551,32 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(width: 16),
           // Streak counter
-          Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3F4D59), // Slate dark color
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  "🔥",
-                  style: TextStyle(fontSize: 18),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  "20",
-                  style: GoogleFonts.nunito(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+          GestureDetector(
+            onTap: _showStreakDialog,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3F4D59), // Slate dark color
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    "🔥",
+                    style: TextStyle(fontSize: 18),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    "$_streak",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -576,14 +646,17 @@ class _MainScreenState extends State<MainScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [subject['color1'], subject['color2']],
+                colors: [
+                  Color(subject['color1'] is int ? subject['color1'] : int.parse(subject['color1'].toString())),
+                  Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: subject['color2'].withValues(alpha: 0.3),
+                  color: Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())).withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -894,6 +967,7 @@ class _MainScreenState extends State<MainScreen> {
         setState(() {
           _selectedNavIndex = index;
         });
+        _loadUserData();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
