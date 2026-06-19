@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import 'settings_screen.dart';
+import 'add_friend_screen.dart';
+import 'friend_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,35 +14,32 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int _avatarIndex = 0;
+  bool _showSettings = false;
+  bool _showAddFriend = false;
+  bool _showFriendList = false;
 
-  // List of interactive avatars the user can cycle through
+  // List of interactive avatars the user can choose from in the popup
   final List<Map<String, dynamic>> _avatars = [
-    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd'},
-    {'emoji': '👨‍💻', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Coder'},
-    {'emoji': '😎', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Cool'},
-    {'emoji': '🦁', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Lion'},
-    {'emoji': '🦖', 'bgColor': const Color(0xFF95FF7A), 'name': 'Dino'},
+    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd Boy'},
+    {'emoji': '👧', 'bgColor': const Color(0xFF8F93EA), 'name': 'Long Hair Girl'},
+    {'emoji': '👦', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Brandon'},
+    {'emoji': '👩‍💼', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Emma'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Curly Boy'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Bentley'},
   ];
 
-  void _cycleAvatar() {
-    setState(() {
-      _avatarIndex = (_avatarIndex + 1) % _avatars.length;
-    });
-  }
-
-  // Method to show Friend List dialog
-  void _showFriendsDialog() {
+  void _showAvatarSelectorDialog() {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: "Friends",
+      barrierLabel: "Select Avatar",
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) {
         return Align(
           alignment: Alignment.center,
           child: Container(
             width: MediaQuery.of(context).size.width * 0.85,
-            height: 350,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(28),
@@ -53,40 +53,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Material(
               color: Colors.transparent,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 20),
                   Text(
-                    "Friend List",
+                    "Choose Avatar",
                     style: GoogleFonts.nunito(
                       color: AppColors.textDark,
                       fontWeight: FontWeight.w900,
                       fontSize: 22,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      children: [
-                        _buildFriendRow("Kevin", "🤓", const Color(0xFFFFD56B), "Online"),
-                        _buildFriendRow("Emma", "👧", const Color(0xFF8F93EA), "Online"),
-                        _buildFriendRow("Max", "👦", const Color(0xFFFF8B8B), "Away"),
-                        _buildFriendRow("Brandon", "👨‍💻", const Color(0xFF7A9EFF), "Offline"),
-                      ],
-                    ),
+                  const SizedBox(height: 24),
+                  // 3x2 Grid using rows
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildDialogAvatarItem(0),
+                          _buildDialogAvatarItem(1),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildDialogAvatarItem(2),
+                          _buildDialogAvatarItem(3),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildDialogAvatarItem(4),
+                          _buildDialogAvatarItem(5),
+                        ],
+                      ),
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        "Close",
-                        style: GoogleFonts.nunito(
-                          color: AppColors.purple,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
+                  const SizedBox(height: 24),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      "Cancel",
+                      style: GoogleFonts.nunito(
+                        color: AppColors.textGrey,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -108,58 +123,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildFriendRow(String name, String emoji, Color bgColor, String status) {
-    Color statusColor = status == "Online"
-        ? Colors.green
-        : (status == "Away" ? Colors.orange : Colors.grey);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: bgColor,
-            radius: 20,
-            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+  Widget _buildDialogAvatarItem(int index) {
+    final avatar = _avatars[index];
+    final bool isSelected = _avatarIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _avatarIndex = index;
+        });
+        Navigator.of(context).pop();
+      },
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: avatar['bgColor'],
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFFB020) : const Color(0xFFE2E4E8),
+            width: isSelected ? 4.5 : 2.0,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              name,
-              style: GoogleFonts.nunito(
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              status,
-              style: GoogleFonts.nunito(
-                color: statusColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 10,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          avatar['emoji'],
+          style: const TextStyle(fontSize: 48),
+        ),
       ),
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
+    if (_showSettings) {
+      return SettingsView(
+        onBack: () => setState(() => _showSettings = false),
+      );
+    }
+    if (_showAddFriend) {
+      return AddFriendView(
+        onBack: () => setState(() => _showAddFriend = false),
+      );
+    }
     final double statusBarHeight = MediaQuery.of(context).padding.top;
     final Map<String, dynamic> activeAvatar = _avatars[_avatarIndex];
 
@@ -184,15 +197,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: IconButton(
                 icon: const Icon(Icons.settings_rounded, color: Colors.white, size: 24),
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Settings coming soon!",
-                        style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  setState(() {
+                    _showSettings = true;
+                  });
                 },
               ),
             ),
@@ -258,7 +265,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         bottom: 4,
                         right: 4,
                         child: GestureDetector(
-                          onTap: _cycleAvatar,
+                          onTap: _showAvatarSelectorDialog,
                           child: Container(
                             width: 36,
                             height: 36,
@@ -307,7 +314,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // 3D Friend List Button
                   Duo3dRectButton(
-                    onPressed: _showFriendsDialog,
+                    onPressed: () {
+                      setState(() {
+                        _showFriendList = true;
+                      });
+                    },
                     faceColor: const Color(0xFFFFB020), // Gold/orange button color
                     shadowColor: const Color(0xFFD88900),
                     child: Text(
@@ -460,6 +471,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          // 5. Slide-down Friend List Overlay
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOutQuad,
+            left: 0,
+            right: 0,
+            top: _showFriendList ? 0 : -MediaQuery.of(context).size.height,
+            height: MediaQuery.of(context).size.height,
+            child: FriendListView(
+              onBack: () => setState(() => _showFriendList = false),
+              onAddFriend: () {
+                setState(() {
+                  _showFriendList = false;
+                  _showAddFriend = true;
+                });
+              },
             ),
           ),
         ],
