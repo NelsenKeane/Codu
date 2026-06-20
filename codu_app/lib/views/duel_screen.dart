@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/game_models.dart';
 import '../services/user_data_service.dart';
+import '../services/audio_service.dart';
 import '../widgets/duo_3d_button.dart';
 
 enum DuelState {
@@ -221,6 +222,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     _radarController.dispose();
     _slideController.dispose();
     _confettiController.dispose();
+    AudioService().stopMusic();
+    AudioService().stopTimeRunningOut();
     super.dispose();
   }
 
@@ -305,6 +308,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   void _startDuelGameplay() {
     _updateState(DuelState.gameplay);
+    AudioService().playMusic('Audio/Game Music.mp3');
 
     // Initialize 90-second round timer
     setState(() {
@@ -330,6 +334,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         setState(() {
           _roundSecondsLeft--;
         });
+        if (_roundSecondsLeft == 5) {
+          AudioService().playTimeRunningOut();
+        }
       } else {
         timer.cancel();
         _endDuel();
@@ -482,6 +489,12 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         }
       }
     });
+
+    if (correct) {
+      AudioService().playSfx('Audio/Correct.mp3');
+    } else {
+      AudioService().playSfx('Audio/Wrong.mp3');
+    }
   }
 
   void _onContinueGameplay() {
@@ -533,16 +546,21 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   Future<void> _endDuel() async {
     _roundTimer?.cancel();
     _opponentActionTimer?.cancel();
+    AudioService().stopMusic();
+    AudioService().stopTimeRunningOut();
 
     int delta = 0;
     if (_userScore > _opponentScore) {
       delta = 30;
       // Start confetti if victory
       _confettiController.repeat();
+      AudioService().playSfx('Audio/Completed.mp3');
     } else if (_userScore < _opponentScore) {
       delta = -15;
+      AudioService().playSfx('Audio/CompletedLose.mp3');
     } else {
       delta = 5;
+      AudioService().playSfx('Audio/Completed.mp3');
     }
 
     int newTrophies = max(0, _trophies + delta);
@@ -592,6 +610,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   Future<void> _forfeitMatch() async {
     _roundTimer?.cancel();
     _opponentActionTimer?.cancel();
+    AudioService().stopMusic();
+    AudioService().stopTimeRunningOut();
+    AudioService().playSfx('Audio/CompletedLose.mp3');
     int newTrophies = max(0, _trophies - 15);
     await UserDataService().saveTrophies(newTrophies);
     setState(() {
