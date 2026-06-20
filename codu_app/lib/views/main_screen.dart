@@ -9,6 +9,7 @@ import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 import 'duel_screen.dart';
+import '../services/audio_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -32,6 +33,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+    AudioService().playMusic('Audio/Menu Music.mp3');
   }
 
   Future<void> _loadUserData() async {

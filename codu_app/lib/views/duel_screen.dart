@@ -2458,6 +2458,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                               _confettiController.stop();
                               _updateState(DuelState.lobby);
                               _loadUserData();
+                              AudioService().playMusic('Audio/Menu Music.mp3');
                             },
                             child: Text(
                               "CONTINUE",

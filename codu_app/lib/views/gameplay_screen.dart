@@ -46,8 +46,11 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
   @override
   void dispose() {
     AudioService().stopMusic();
+    AudioService().playMusic('Audio/Menu Music.mp3');
     super.dispose();
   }
+
+
 
   void _clearSlots() {
     _slotContents.clear();
