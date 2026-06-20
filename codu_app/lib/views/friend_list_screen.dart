@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/friend_service.dart';
@@ -23,12 +24,12 @@ class _FriendListViewState extends State<FriendListView> {
   final TextEditingController _searchController = TextEditingController();
 
   final List<Map<String, dynamic>> _avatars = [
-    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd Boy'},
-    {'emoji': '👧', 'bgColor': const Color(0xFF8F93EA), 'name': 'Long Hair Girl'},
-    {'emoji': '👦', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Brandon'},
-    {'emoji': '👩‍💼', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Emma'},
-    {'emoji': '🧒', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Curly Boy'},
-    {'emoji': '🧒', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Bentley'},
+    {'svgPath': 'assets/images/Characters/Female1.svg', 'bgColor': const Color(0xFFFFD56B), 'name': 'Female 1'},
+    {'svgPath': 'assets/images/Characters/Female2.svg', 'bgColor': const Color(0xFF8F93EA), 'name': 'Female 2'},
+    {'svgPath': 'assets/images/Characters/Female3.svg', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Female 3'},
+    {'svgPath': 'assets/images/Characters/Male1.svg', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Male 1'},
+    {'svgPath': 'assets/images/Characters/Male2.svg', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Male 2'},
+    {'svgPath': 'assets/images/Characters/Male3.svg', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Male 3'},
   ];
 
   @override
@@ -575,9 +576,16 @@ class _FriendListViewState extends State<FriendListView> {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Text(
-              avatar['emoji'],
-              style: const TextStyle(fontSize: 32),
+            child: ClipOval(
+              child: Transform.scale(
+                scale: 1.2,
+                child: SvgPicture.asset(
+                  avatar['svgPath'],
+                  width: 58,
+                  height: 58,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -730,9 +738,16 @@ class _FriendListViewState extends State<FriendListView> {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Text(
-              avatar['emoji'],
-              style: const TextStyle(fontSize: 32),
+            child: ClipOval(
+              child: Transform.scale(
+                scale: 1.2,
+                child: SvgPicture.asset(
+                  avatar['svgPath'],
+                  width: 58,
+                  height: 58,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 14),

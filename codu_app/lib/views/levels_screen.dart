@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:path_drawing/path_drawing.dart';
 import '../services/user_data_service.dart';
+import 'gameplay_screen.dart';
 
 class LevelsScreen extends StatefulWidget {
   const LevelsScreen({super.key});
@@ -34,6 +35,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   double _canvasHeight = 16400.0;
   String _svgContent = '';
   int _activeLevelIndex = 2; // Will be calculated from DB progress
+  Map<int, int> _levelStarsMap = {};
 
   @override
   void initState() {
@@ -88,6 +90,8 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         orElse: () => <String, dynamic>{},
       );
 
+      final starsMap = await UserDataService().getLevelStars(dbSubject);
+
       int completed = 0;
       int total = 10;
       if (subjectProgress.isNotEmpty) {
@@ -95,7 +99,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         total = subjectProgress['lessons'] ?? 10;
       }
       if (total == 0) total = 10;
-      _activeLevelIndex = (completed / total * 45).floor().clamp(0, 44);
+      
+      setState(() {
+        _levelStarsMap = starsMap;
+        _activeLevelIndex = completed.clamp(0, 44);
+      });
 
       String svgPath = _getSvgPath();
       String svgString = await rootBundle.loadString(svgPath);
@@ -933,7 +941,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
 
       if (i < _activeLevelIndex) {
         type = 'completed';
-        stars = (i % 2 == 0) ? 3 : 2;
+        stars = _levelStarsMap[levelNum] ?? 3;
       } else if (i == _activeLevelIndex) {
         type = 'active';
       } else {
@@ -974,18 +982,45 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
       final double boxWidth = nodeSize + 40;
       final double boxHeight = nodeSize + 60;
 
+      final bool isPlayable = type == 'active' || type == 'completed';
+
       return Positioned(
         left: pos.dx - (boxWidth / 2),
         top: pos.dy - (boxHeight / 2),
-        child: SizedBox(
-          width: boxWidth,
-          height: boxHeight,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              nodeChild,
-            ],
+        child: GestureDetector(
+          onTap: () {
+            if (isPlayable) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => GameplayScreen(
+                    levelNumber: levelNum,
+                    subject: _selectedSubject,
+                  ),
+                ),
+              ).then((_) {
+                _loadUserData();
+              });
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("This level is locked! Complete the previous levels first."),
+                  backgroundColor: Color(0xFFE55353),
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+          child: SizedBox(
+            width: boxWidth,
+            height: boxHeight,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                nodeChild,
+              ],
+            ),
           ),
         ),
       );

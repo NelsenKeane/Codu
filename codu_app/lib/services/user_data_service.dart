@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'friend_service.dart';
 
 class UserDataService {
   // Private constructor for singleton pattern
@@ -17,28 +19,28 @@ class UserDataService {
   final List<Map<String, dynamic>> _defaultSubjects = [
     {
       'title': 'Introduction to Python',
-      'lessons': 54,
+      'lessons': 45,
       'color1': 0xFF8F93EA,
       'color2': 0xFF7076E3,
       'lang': 'Python',
     },
     {
       'title': 'Introduction to C++',
-      'lessons': 59,
+      'lessons': 45,
       'color1': 0xFF7A9EFF,
       'color2': 0xFF5672E5,
       'lang': 'C++',
     },
     {
       'title': 'Introduction to Javascript',
-      'lessons': 54,
+      'lessons': 45,
       'color1': 0xFFFFD56B,
       'color2': 0xFFE5A93B,
       'lang': 'Javascript',
     },
     {
       'title': 'Introduction to Java',
-      'lessons': 64,
+      'lessons': 45,
       'color1': 0xFFFF8B8B,
       'color2': 0xFFE55353,
       'lang': 'Java',
@@ -49,30 +51,30 @@ class UserDataService {
   final List<Map<String, dynamic>> _defaultHistory = [
     {
       'title': 'Introduction to Python',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
+      'lessons': 45,
+      'completed': 0,
+      'status': 'Not Started',
       'lang': 'Python',
     },
     {
       'title': 'Introduction to C++',
-      'lessons': 59,
-      'completed': 59,
-      'status': 'Completed',
+      'lessons': 45,
+      'completed': 0,
+      'status': 'Not Started',
       'lang': 'C++',
     },
     {
       'title': 'Introduction to Javascript',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
+      'lessons': 45,
+      'completed': 0,
+      'status': 'Not Started',
       'lang': 'Javascript',
     },
     {
       'title': 'Introduction to Java',
-      'lessons': 64,
-      'completed': 64,
-      'status': 'Completed',
+      'lessons': 45,
+      'completed': 0,
+      'status': 'Not Started',
       'lang': 'Java',
     },
   ];
@@ -325,7 +327,6 @@ class UserDataService {
     await prefs.setInt('avatar_$uid', index);
   }
 
-  // Load Subjects
   Future<List<Map<String, dynamic>>> getSubjects() async {
     final uid = _uid;
     if (uid == null) return [];
@@ -336,7 +337,11 @@ class UserDataService {
     }
     try {
       final List<dynamic> decoded = json.decode(jsonStr);
-      return decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      final List<Map<String, dynamic>> list = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      for (var item in list) {
+        item['lessons'] = 45;
+      }
+      return list;
     } catch (e) {
       return List<Map<String, dynamic>>.from(_defaultSubjects);
     }
@@ -362,7 +367,11 @@ class UserDataService {
     }
     try {
       final List<dynamic> decoded = json.decode(jsonStr);
-      return decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      final List<Map<String, dynamic>> list = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      for (var item in list) {
+        item['lessons'] = 45;
+      }
+      return list;
     } catch (e) {
       return List<Map<String, dynamic>>.from(_defaultHistory);
     }
@@ -423,5 +432,77 @@ class UserDataService {
     } catch (_) {
       // If Firebase update fails, local storage is still saved
     }
+  }
+
+  // Get stars achieved for each level in a subject
+  Future<Map<int, int>> getLevelStars(String subjectName) async {
+    final uid = _uid;
+    if (uid == null) return {};
+    final prefs = await SharedPreferences.getInstance();
+    final String? jsonStr = prefs.getString('level_stars_${uid}_$subjectName');
+    if (jsonStr == null) return {};
+    try {
+      final Map<String, dynamic> decoded = json.decode(jsonStr);
+      return decoded.map((key, val) => MapEntry(int.parse(key), val as int));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  // Save stars achieved for a level
+  Future<void> saveLevelStars(String subjectName, int levelNumber, int stars) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final starsMap = await getLevelStars(subjectName);
+    final int currentStars = starsMap[levelNumber] ?? 0;
+    if (stars > currentStars) {
+      starsMap[levelNumber] = stars;
+      final String jsonStr = json.encode(starsMap.map((key, val) => MapEntry(key.toString(), val)));
+      await prefs.setString('level_stars_${uid}_$subjectName', jsonStr);
+    }
+  }
+
+  // Complete the current level/lesson for a subject and sync rewards
+  Future<void> completeLevel(String subjectName, int levelNumber, int stars) async {
+    final history = await getHistory();
+    final dbSubject = subjectName == 'Phyton' ? 'Python' : subjectName;
+
+    // Save stars for this level
+    await saveLevelStars(dbSubject, levelNumber, stars);
+
+    for (int i = 0; i < history.length; i++) {
+      if (history[i]['lang'] == dbSubject) {
+        int currentCompleted = history[i]['completed'] ?? 0;
+        int totalLessons = history[i]['lessons'] ?? 45;
+
+        // If they complete the current active level, advance progression
+        if (levelNumber == currentCompleted + 1) {
+          if (currentCompleted < totalLessons) {
+            history[i]['completed'] = currentCompleted + 1;
+            if (history[i]['completed'] == totalLessons) {
+              history[i]['status'] = 'Completed';
+            } else {
+              history[i]['status'] = 'In Progress';
+            }
+          }
+        }
+        break;
+      }
+    }
+    await saveHistory(history);
+
+    // Award +10 trophies
+    int currentTrophies = await getTrophies();
+    await saveTrophies(currentTrophies + 10);
+
+    // Increase streak by 1
+    int currentStreak = await getStreak();
+    await saveStreak(currentStreak + 1);
+
+    // Sync to Firestore
+    await FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync progress to Firestore: $e");
+    });
   }
 }

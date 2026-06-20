@@ -518,12 +518,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // List of interactive avatars the user can choose from in the popup
   final List<Map<String, dynamic>> _avatars = [
-    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd Boy'},
-    {'emoji': '👧', 'bgColor': const Color(0xFF8F93EA), 'name': 'Long Hair Girl'},
-    {'emoji': '👦', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Brandon'},
-    {'emoji': '👩‍💼', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Emma'},
-    {'emoji': '🧒', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Curly Boy'},
-    {'emoji': '🧒', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Bentley'},
+    {'svgPath': 'assets/images/Characters/Female1.svg', 'bgColor': const Color(0xFFFFD56B), 'name': 'Female 1'},
+    {'svgPath': 'assets/images/Characters/Female2.svg', 'bgColor': const Color(0xFF8F93EA), 'name': 'Female 2'},
+    {'svgPath': 'assets/images/Characters/Female3.svg', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Female 3'},
+    {'svgPath': 'assets/images/Characters/Male1.svg', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Male 1'},
+    {'svgPath': 'assets/images/Characters/Male2.svg', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Male 2'},
+    {'svgPath': 'assets/images/Characters/Male3.svg', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Male 3'},
   ];
 
   void _showAvatarSelectorDialog() {
@@ -652,9 +652,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         alignment: Alignment.center,
-        child: Text(
-          avatar['emoji'],
-          style: const TextStyle(fontSize: 48),
+        child: ClipOval(
+          child: Transform.scale(
+            scale: 1.2,
+            child: SvgPicture.asset(
+              avatar['svgPath'],
+              width: 80,
+              height: 80,
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
       ),
     );
@@ -755,9 +762,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ],
                               ),
                               alignment: Alignment.center,
-                              child: Text(
-                                activeAvatar['emoji'],
-                                style: const TextStyle(fontSize: 84),
+                              child: ClipOval(
+                                child: Transform.scale(
+                                  scale: 1.2,
+                                  child: SvgPicture.asset(
+                                    activeAvatar['svgPath'],
+                                    width: 145,
+                                    height: 145,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
                               ),
                             ),
                             Positioned(
