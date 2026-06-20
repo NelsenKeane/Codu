@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -913,7 +913,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 12),
                                         child: Row(
                                           children: [
-                                            const Text("≡ƒöÑ", style: TextStyle(fontSize: 24)),
+                                            const Text("🔥", style: TextStyle(fontSize: 24)),
                                             const SizedBox(width: 10),
                                             Text(
                                               "$_streak days",
@@ -941,7 +941,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         padding: const EdgeInsets.symmetric(horizontal: 12),
                                         child: Row(
                                           children: [
-                                            const Text("≡ƒÅå", style: TextStyle(fontSize: 24)),
+                                            const Text("🏆", style: TextStyle(fontSize: 24)),
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Text(
@@ -976,15 +976,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 runSpacing: 16,
                                 alignment: WrapAlignment.center,
                                 children: [
-                                  BadgeShield(emoji: 'Γ¡É', fillColor: const Color(0xFFFFD700), borderColor: const Color(0xFFFFA000)),
-                                  BadgeShield(emoji: '≡ƒöÑ', fillColor: const Color(0xFFFF5722), borderColor: const Color(0xFFBF360C)),
-                                  BadgeShield(emoji: '≡ƒÆí', fillColor: const Color(0xFFFFEB3B), borderColor: const Color(0xFFF9A825)),
-                                  BadgeShield(emoji: '≡ƒÅå', fillColor: const Color(0xFF4CAF50), borderColor: const Color(0xFF1B5E20)),
-                                  BadgeShield(emoji: '≡ƒÜÇ', fillColor: const Color(0xFF2196F3), borderColor: const Color(0xFF0D47A1)),
-                                  BadgeShield(emoji: '≡ƒÄ»', fillColor: const Color(0xFFE91E63), borderColor: const Color(0xFF880E4F)),
-                                  BadgeShield(emoji: '≡ƒÆÄ', fillColor: const Color(0xFF00BCD4), borderColor: const Color(0xFF006064)),
-                                  BadgeShield(emoji: '≡ƒªü', fillColor: const Color(0xFFFF9800), borderColor: const Color(0xFFE65100)),
-                                  BadgeShield(emoji: '≡ƒºá', fillColor: const Color(0xFF9C27B0), borderColor: const Color(0xFF4A148C)),
+                                  BadgeShield(emoji: '⭐', fillColor: const Color(0xFFFFD700), borderColor: const Color(0xFFFFA000)),
+                                  BadgeShield(emoji: '🔥', fillColor: const Color(0xFFFF5722), borderColor: const Color(0xFFBF360C)),
+                                  BadgeShield(emoji: '💡', fillColor: const Color(0xFFFFEB3B), borderColor: const Color(0xFFF9A825)),
+                                  BadgeShield(emoji: '🏆', fillColor: const Color(0xFF4CAF50), borderColor: const Color(0xFF1B5E20)),
+                                  BadgeShield(emoji: '🚀', fillColor: const Color(0xFF2196F3), borderColor: const Color(0xFF0D47A1)),
+                                  BadgeShield(emoji: '🎯', fillColor: const Color(0xFFE91E63), borderColor: const Color(0xFF880E4F)),
+                                  BadgeShield(emoji: '💎', fillColor: const Color(0xFF00BCD4), borderColor: const Color(0xFF006064)),
+                                  BadgeShield(emoji: '🦁', fillColor: const Color(0xFFFF9800), borderColor: const Color(0xFFE65100)),
+                                  BadgeShield(emoji: '🧠', fillColor: const Color(0xFF9C27B0), borderColor: const Color(0xFF4A148C)),
                                 ],
                               ),
                             ],
