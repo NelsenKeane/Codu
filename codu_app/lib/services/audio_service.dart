@@ -83,13 +83,24 @@ class AudioService {
       return;
     }
 
-    await stopMusic();
+    try {
+      await stopMusic();
 
-    _currentMusicAsset = assetPath;
-    _musicPlayer = AudioPlayer();
-    await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
-    await _musicPlayer!.setVolume(_effectiveMusicVolume);
-    await _musicPlayer!.play(AssetSource(assetPath));
+      _currentMusicAsset = assetPath;
+      _musicPlayer = AudioPlayer();
+      await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
+      await _musicPlayer!.setVolume(_effectiveMusicVolume);
+      // ignore: avoid_print
+      print("AudioService: Attempting to play background music: $assetPath (Volume: $_effectiveMusicVolume)");
+      await _musicPlayer!.play(AssetSource(assetPath));
+      // ignore: avoid_print
+      print("AudioService: Successfully started playing music: $assetPath");
+    } catch (e, stack) {
+      // ignore: avoid_print
+      print("AudioService Error: Failed to play music $assetPath: $e");
+      // ignore: avoid_print
+      print(stack);
+    }
   }
 
   /// Stop background music
@@ -104,27 +115,45 @@ class AudioService {
 
   /// Play a one-shot Sound Effect (SFX)
   Future<void> playSfx(String assetPath) async {
-    final player = AudioPlayer();
-    await player.setVolume(_effectiveSfxVolume);
-    await player.play(AssetSource(assetPath));
-    
-    // Auto-dispose player when playback completes
-    player.onPlayerComplete.listen((_) {
-      player.dispose();
-    });
+    try {
+      final player = AudioPlayer();
+      await player.setVolume(_effectiveSfxVolume);
+      // ignore: avoid_print
+      print("AudioService: Attempting to play SFX: $assetPath (Volume: $_effectiveSfxVolume)");
+      await player.play(AssetSource(assetPath));
+      
+      // Auto-dispose player when playback completes
+      player.onPlayerComplete.listen((_) {
+        player.dispose();
+      });
+    } catch (e, stack) {
+      // ignore: avoid_print
+      print("AudioService Error: Failed to play SFX $assetPath: $e");
+      // ignore: avoid_print
+      print(stack);
+    }
   }
 
   /// Play the time running out ticking warning
   Future<void> playTimeRunningOut() async {
-    await stopTimeRunningOut();
+    try {
+      await stopTimeRunningOut();
 
-    _timeRunningOutPlayer = AudioPlayer();
-    await _timeRunningOutPlayer!.setVolume(_effectiveSfxVolume);
-    await _timeRunningOutPlayer!.play(AssetSource('Audio/TimeRunningOut.mp3'));
-    
-    _timeRunningOutPlayer!.onPlayerComplete.listen((_) {
-      stopTimeRunningOut();
-    });
+      _timeRunningOutPlayer = AudioPlayer();
+      await _timeRunningOutPlayer!.setVolume(_effectiveSfxVolume);
+      // ignore: avoid_print
+      print("AudioService: Attempting to play TimeRunningOut SFX (Volume: $_effectiveSfxVolume)");
+      await _timeRunningOutPlayer!.play(AssetSource('Audio/TimeRunningOut.mp3'));
+      
+      _timeRunningOutPlayer!.onPlayerComplete.listen((_) {
+        stopTimeRunningOut();
+      });
+    } catch (e, stack) {
+      // ignore: avoid_print
+      print("AudioService Error: Failed to play TimeRunningOut warning: $e");
+      // ignore: avoid_print
+      print(stack);
+    }
   }
 
   /// Stop the time running out warning
