@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -556,15 +556,15 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   String _getSubjectEmoji(String subject) {
     switch (subject) {
       case 'Phyton':
-        return '🐍';
+        return '≡ƒÉì';
       case 'C++':
-        return '🔵';
+        return '≡ƒö╡';
       case 'Javascript':
-        return '💛';
+        return '≡ƒÆ¢';
       case 'Java':
-        return '☕';
+        return 'Γÿò';
       default:
-        return '📚';
+        return '≡ƒôÜ';
     }
   }
 
@@ -573,7 +573,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     final double statusBarHeight = MediaQuery.of(context).padding.top;
     final double screenWidth = MediaQuery.of(context).size.width;
 
-    // Always compute canvas height proportionally — SVG viewBox is 1080×16400.
+    // Always compute canvas height proportionally ΓÇö SVG viewBox is 1080├ù16400.
     // This guarantees the image is NEVER stretched regardless of device width.
     _scale = screenWidth / 1080.0;
     _canvasHeight = 16400.0 * _scale;
@@ -612,9 +612,9 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                         height: _canvasHeight,
                         child: Stack(
                           children: [
-                            // ── SVG background ──────────────────────────────
+                            // ΓöÇΓöÇ SVG background ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
                             // fitWidth fills the full screen width and scales
-                            // the height proportionally — no stretching ever.
+                            // the height proportionally ΓÇö no stretching ever.
                             Positioned.fill(
                               child: _svgContent.isNotEmpty
                                   ? SvgPicture.string(
@@ -625,13 +625,13 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                                   : const SizedBox.shrink(),
                             ),
 
-                            // ── Animated player position marker ─────────────
+                            // ΓöÇΓöÇ Animated player position marker ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
                             // The SVG already draws the road; we only overlay
                             // the player circle and level nodes on top.
                             if (_pathMetric != null && _animation != null)
                               _buildAnimatedProgressMarker(),
 
-                            // ── Level nodes along the path ──────────────────
+                            // ΓöÇΓöÇ Level nodes along the path ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
                             ..._buildLevelNodes(screenWidth),
                           ],
                         ),
@@ -871,7 +871,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
             child: Row(
               children: [
                 const Text(
-                  "🔥",
+                  "≡ƒöÑ",
                   style: TextStyle(fontSize: 16),
                 ),
                 const SizedBox(width: 6),

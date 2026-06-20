@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
@@ -624,7 +624,7 @@ class _FriendListViewState extends State<FriendListView> {
                       ),
                       child: Row(
                         children: [
-                          const Text("🔥", style: TextStyle(fontSize: 11)),
+                          const Text("≡ƒöÑ", style: TextStyle(fontSize: 11)),
                           const SizedBox(width: 4),
                           Text(
                             (friend['streak'] ?? 0).toString(),
@@ -647,7 +647,7 @@ class _FriendListViewState extends State<FriendListView> {
                       ),
                       child: Row(
                         children: [
-                          const Text("🏆", style: TextStyle(fontSize: 11)),
+                          const Text("≡ƒÅå", style: TextStyle(fontSize: 11)),
                           const SizedBox(width: 4),
                           Text(
                             (friend['trophies'] ?? 0).toString(),

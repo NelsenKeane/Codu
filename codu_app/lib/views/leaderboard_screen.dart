@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -14,26 +14,26 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   // Mock Global data
   final List<Map<String, dynamic>> _globalRankings = [
     // Top 3 (on podium)
-    {'rank': 1, 'name': 'Kevin', 'score': 2850, 'emoji': '🤓', 'bgColor': Color(0xFFFFD56B)},
-    {'rank': 2, 'name': 'Emma', 'score': 1500, 'emoji': '👧', 'bgColor': Color(0xFF8F93EA)},
-    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '👦', 'bgColor': Color(0xFFFF8B8B)},
+    {'rank': 1, 'name': 'Kevin', 'score': 2850, 'emoji': '≡ƒñô', 'bgColor': Color(0xFFFFD56B)},
+    {'rank': 2, 'name': 'Emma', 'score': 1500, 'emoji': '≡ƒæº', 'bgColor': Color(0xFF8F93EA)},
+    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '≡ƒæª', 'bgColor': Color(0xFFFF8B8B)},
     // Rest of list
-    {'rank': 4, 'name': 'Brandon', 'score': 980, 'emoji': '👨‍💻', 'bgColor': Color(0xFF7A9EFF)},
-    {'rank': 5, 'name': 'Bentley', 'score': 950, 'emoji': '🧒', 'bgColor': Color(0xFF8CEEAD)},
-    {'rank': 6, 'name': 'Sophia', 'score': 920, 'emoji': '👩‍💻', 'bgColor': Color(0xFFFFB5E8)},
-    {'rank': 7, 'name': 'Lucas', 'score': 890, 'emoji': '👦', 'bgColor': Color(0xFFBFFCC6)},
-    {'rank': 8, 'name': 'Olivia', 'score': 850, 'emoji': '👧', 'bgColor': Color(0xFFFFC5A5)},
+    {'rank': 4, 'name': 'Brandon', 'score': 980, 'emoji': '≡ƒæ¿ΓÇì≡ƒÆ╗', 'bgColor': Color(0xFF7A9EFF)},
+    {'rank': 5, 'name': 'Bentley', 'score': 950, 'emoji': '≡ƒºÆ', 'bgColor': Color(0xFF8CEEAD)},
+    {'rank': 6, 'name': 'Sophia', 'score': 920, 'emoji': '≡ƒæ⌐ΓÇì≡ƒÆ╗', 'bgColor': Color(0xFFFFB5E8)},
+    {'rank': 7, 'name': 'Lucas', 'score': 890, 'emoji': '≡ƒæª', 'bgColor': Color(0xFFBFFCC6)},
+    {'rank': 8, 'name': 'Olivia', 'score': 850, 'emoji': '≡ƒæº', 'bgColor': Color(0xFFFFC5A5)},
   ];
 
   // Mock Friends data
   final List<Map<String, dynamic>> _friendsRankings = [
     // Top 3 (on podium for friends)
-    {'rank': 1, 'name': 'Emma', 'score': 1500, 'emoji': '👧', 'bgColor': Color(0xFF8F93EA)},
-    {'rank': 2, 'name': 'You', 'score': 1250, 'emoji': '🦖', 'bgColor': Color(0xFF95FF7A), 'isSelf': true},
-    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '👦', 'bgColor': Color(0xFFFF8B8B)},
+    {'rank': 1, 'name': 'Emma', 'score': 1500, 'emoji': '≡ƒæº', 'bgColor': Color(0xFF8F93EA)},
+    {'rank': 2, 'name': 'You', 'score': 1250, 'emoji': '≡ƒªû', 'bgColor': Color(0xFF95FF7A), 'isSelf': true},
+    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '≡ƒæª', 'bgColor': Color(0xFFFF8B8B)},
     // Rest of list
-    {'rank': 4, 'name': 'Bentley', 'score': 950, 'emoji': '🧒', 'bgColor': Color(0xFF8CEEAD)},
-    {'rank': 5, 'name': 'Sophia', 'score': 920, 'emoji': '👩‍💻', 'bgColor': Color(0xFFFFB5E8)},
+    {'rank': 4, 'name': 'Bentley', 'score': 950, 'emoji': '≡ƒºÆ', 'bgColor': Color(0xFF8CEEAD)},
+    {'rank': 5, 'name': 'Sophia', 'score': 920, 'emoji': '≡ƒæ⌐ΓÇì≡ƒÆ╗', 'bgColor': Color(0xFFFFB5E8)},
   ];
 
   @override
@@ -177,7 +177,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            "🏆",
+            "≡ƒÅå",
             style: TextStyle(fontSize: 16),
           ),
           const SizedBox(width: 8),
@@ -426,7 +426,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    "🏆",
+                    "≡ƒÅå",
                     style: TextStyle(fontSize: 12),
                   ),
                   const SizedBox(width: 4),
@@ -520,7 +520,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                "🏆",
+                "≡ƒÅå",
                 style: TextStyle(fontSize: 16),
               ),
               const SizedBox(width: 6),
