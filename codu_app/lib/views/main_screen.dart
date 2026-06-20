@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/app_colors.dart';
+import '../services/user_data_service.dart';
+import '../services/friend_service.dart';
 import 'lessons_screen.dart';
+import 'levels_screen.dart';
+import 'leaderboard_screen.dart';
+import 'profile_screen.dart';
+import 'duel_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,80 +22,173 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
+  int _streak = 0;
+  List<Map<String, dynamic>> _subjects = [];
+  List<Map<String, dynamic>> _history = [];
+  bool _isLoadingData = true;
+  bool _showBottomBar = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    await UserDataService().trackAppOpen();
+    final streak = await UserDataService().getStreak();
+    final subjects = await UserDataService().getSubjects();
+    final history = await UserDataService().getHistory();
+    
+    // Sync profile to Firestore asynchronously
+    FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync user to firestore: $e");
+    });
+
+    if (mounted) {
+      setState(() {
+        _streak = streak;
+        _subjects = subjects;
+        _history = history;
+        _isLoadingData = false;
+      });
+    }
+  }
+
+  void _showStreakDialog() {
+    final TextEditingController controller = TextEditingController(text: _streak.toString());
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Streak",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Streak Count",
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: AppColors.textGrey),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          if (val > 0) {
+                            controller.text = (val - 1).toString();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textDark,
+                          ),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: AppColors.green),
+                        onPressed: () {
+                          int val = int.tryParse(controller.text) ?? 0;
+                          controller.text = (val + 1).toString();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.nunito(
+                            color: AppColors.textGrey,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFB020),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        onPressed: () async {
+                          int? newStreak = int.tryParse(controller.text);
+                          if (newStreak != null && newStreak >= 0) {
+                            await UserDataService().saveStreak(newStreak);
+                            _loadUserData();
+                          }
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                        child: Text(
+                          "Save",
+                          style: GoogleFonts.nunito(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  // Subjects data
-  final List<Map<String, dynamic>> _subjects = [
-    {
-      'title': 'Introduction to Python',
-      'lessons': 54,
-      'color1': Color(0xFF8F93EA),
-      'color2': Color(0xFF7076E3),
-      'lang': 'Python',
-    },
-    {
-      'title': 'Introduction to C++',
-      'lessons': 59,
-      'color1': Color(0xFF7A9EFF),
-      'color2': Color(0xFF5672E5),
-      'lang': 'C++',
-    },
-    {
-      'title': 'Introduction to Javascript',
-      'lessons': 54,
-      'color1': Color(0xFFFFD56B),
-      'color2': Color(0xFFE5A93B),
-      'lang': 'Javascript',
-    },
-    {
-      'title': 'Introduction to Java',
-      'lessons': 64,
-      'color1': Color(0xFFFF8B8B),
-      'color2': Color(0xFFE55353),
-      'lang': 'Java',
-    },
-  ];
-
-  // History progress data
-  final List<Map<String, dynamic>> _history = [
-    {
-      'title': 'Introduction to Python',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
-      'lang': 'Python',
-    },
-    {
-      'title': 'Introduction to C++',
-      'lessons': 59,
-      'completed': 59,
-      'status': 'Completed',
-      'lang': 'C++',
-    },
-    {
-      'title': 'Introduction to Javascript',
-      'lessons': 54,
-      'completed': 41,
-      'status': 'In Progress',
-      'lang': 'Javascript',
-    },
-    {
-      'title': 'Introduction to Java',
-      'lessons': 64,
-      'completed': 64,
-      'status': 'Completed',
-      'lang': 'Java',
-    },
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
-
+  Widget _buildHomeDashboard(double statusBarHeight) {
     // Filter subjects and history based on search query
     final filteredSubjects = _subjects
         .where((s) => s['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
@@ -98,83 +198,147 @@ class _MainScreenState extends State<MainScreen> {
         .where((h) => h['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
 
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              // Top Header Area (Sky blue, mascot, speech bubble)
+              _buildHeader(statusBarHeight),
+            ],
+          ),
+        ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(36),
+                topRight: Radius.circular(36),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                // Search bar & Streak Row
+                _buildSearchRow(),
+                const SizedBox(height: 28),
+
+                // Subjects Header
+                _buildSectionHeader(
+                  title: "Subjects",
+                  onViewAll: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const LessonsScreen()),
+                    );
+                    _loadUserData();
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Horizontal Subjects list
+                _buildSubjectsList(filteredSubjects),
+                const SizedBox(height: 28),
+
+                // History Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    "History",
+                    style: GoogleFonts.nunito(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Grid-like History cards
+                _buildHistoryCards(filteredHistory),
+                
+                // Extra padding for the floating navigation bar
+                const SizedBox(height: 110),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoadingData) {
+      return const Scaffold(
+        backgroundColor: AppColors.skyBlue,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
+
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
+    Widget bodyContent;
+    switch (_selectedNavIndex) {
+      case 0:
+        bodyContent = _buildHomeDashboard(statusBarHeight);
+        break;
+      case 1:
+        bodyContent = const LevelsScreen();
+        break;
+      case 2:
+        bodyContent = DuelScreen(
+          onShowBottomBarChanged: (show) {
+            if (mounted) {
+              setState(() {
+                _showBottomBar = show;
+              });
+            }
+          },
+        );
+        break;
+      case 3:
+        bodyContent = const LeaderboardScreen();
+        break;
+      case 4:
+        bodyContent = const ProfileScreen();
+        break;
+      default:
+        bodyContent = _buildHomeDashboard(statusBarHeight);
+    }
+
     return Scaffold(
       backgroundColor: AppColors.skyBlue,
       body: Stack(
         children: [
-          // Main Scrollable Body
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                // Top Header Area (Sky blue, mascot, speech bubble)
-                _buildHeader(statusBarHeight),
-
-                // Content Area (Light Blue Background)
-                Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: AppColors.cardBackground,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(36),
-                      topRight: Radius.circular(36),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      // Search bar & Streak Row
-                      _buildSearchRow(),
-                      const SizedBox(height: 28),
-
-                      // Subjects Header
-                      _buildSectionHeader(
-                        title: "Subjects",
-                        onViewAll: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (context) => const LessonsScreen()),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Horizontal Subjects list
-                      _buildSubjectsList(filteredSubjects),
-                      const SizedBox(height: 28),
-
-                      // History Header
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text(
-                          "History",
-                          style: GoogleFonts.nunito(
-                            color: Colors.black,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 22,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Grid-like History cards
-                      _buildHistoryCards(filteredHistory),
-                      
-                      // Extra padding for the floating navigation bar
-                      const SizedBox(height: 110),
-                    ],
-                  ),
-                ),
-              ],
+          // SVG background for tabs that don't have their own (home, explore, leaderboard)
+          if (_selectedNavIndex != 1 && _selectedNavIndex != 2 && _selectedNavIndex != 4)
+            Positioned.fill(
+              child: SvgPicture.asset(
+                'assets/images/codu_background_pattern_mobile_soft.svg',
+                fit: BoxFit.cover,
+              ),
             ),
+
+          Positioned.fill(
+            child: bodyContent,
           ),
 
           // Floating Bottom Navigation Bar
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 24,
-            child: _buildBottomNavigationBar(),
-          ),
+          if (_showBottomBar)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 24,
+              child: _buildBottomNavigationBar(),
+            ),
         ],
       ),
     );
@@ -398,29 +562,32 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(width: 16),
           // Streak counter
-          Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3F4D59), // Slate dark color
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  "🔥",
-                  style: TextStyle(fontSize: 18),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  "20",
-                  style: GoogleFonts.nunito(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+          GestureDetector(
+            onTap: _showStreakDialog,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3F4D59), // Slate dark color
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    "🔥",
+                    style: TextStyle(fontSize: 18),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    _streak.toString(),
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -485,19 +652,40 @@ class _MainScreenState extends State<MainScreen> {
         itemCount: list.length,
         itemBuilder: (context, index) {
           final subject = list[index];
+          
+          // Helper to get Color safely from subject data
+          Color c1 = Colors.blue;
+          Color c2 = Colors.blueAccent;
+          if (subject['color1'] is Color) {
+            c1 = subject['color1'];
+          } else if (subject['color1'] is int) {
+            c1 = Color(subject['color1']);
+          } else if (subject['color1'] is String) {
+            final parsed = int.tryParse(subject['color1']);
+            if (parsed != null) c1 = Color(parsed);
+          }
+          if (subject['color2'] is Color) {
+            c2 = subject['color2'];
+          } else if (subject['color2'] is int) {
+            c2 = Color(subject['color2']);
+          } else if (subject['color2'] is String) {
+            final parsed = int.tryParse(subject['color2']);
+            if (parsed != null) c2 = Color(parsed);
+          }
+
           return Container(
             width: 200,
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [subject['color1'], subject['color2']],
+                colors: [c1, c2],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: subject['color2'].withValues(alpha: 0.3),
+                  color: c2.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -511,7 +699,7 @@ class _MainScreenState extends State<MainScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildLanguageBadge(subject['lang']),
+                    _buildLanguageBadge(subject['lang'] ?? ''),
                     Container(
                       width: 24,
                       height: 24,
@@ -531,7 +719,7 @@ class _MainScreenState extends State<MainScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      subject['title'],
+                      subject['title'] ?? '',
                       style: GoogleFonts.nunito(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -541,7 +729,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "${subject['lessons']} Lessons",
+                      "${subject['lessons'] ?? 0} Lessons",
                       style: GoogleFonts.nunito(
                         color: Colors.white.withValues(alpha: 0.7),
                         fontWeight: FontWeight.bold,
@@ -602,6 +790,10 @@ class _MainScreenState extends State<MainScreen> {
     bool isCompleted = item['status'] == 'Completed';
     Color themeColor = isCompleted ? AppColors.green : AppColors.yellow;
 
+    final completedCount = item['completed'] ?? 0;
+    final totalLessons = item['lessons'] ?? 45;
+    final double progressVal = totalLessons > 0 ? (completedCount / totalLessons) : 0.0;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -622,7 +814,7 @@ class _MainScreenState extends State<MainScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildLanguageBadge(item['lang']),
+              _buildLanguageBadge(item['lang'] ?? ''),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -630,7 +822,7 @@ class _MainScreenState extends State<MainScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  item['status'],
+                  item['status'] ?? '',
                   style: GoogleFonts.nunito(
                     color: themeColor,
                     fontWeight: FontWeight.w900,
@@ -643,7 +835,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 12),
           // Title
           Text(
-            item['title'],
+            item['title'] ?? '',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.nunito(
@@ -655,7 +847,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 2),
           // Subtitle
           Text(
-            "${item['lessons']} Lessons",
+            "${totalLessons} Lessons",
             style: GoogleFonts.nunito(
               color: AppColors.textGrey,
               fontWeight: FontWeight.bold,
@@ -665,7 +857,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 12),
           // Progress text
           Text(
-            "${item['completed']} of ${item['lessons']} Completed",
+            "${completedCount} of ${totalLessons} Completed",
             style: GoogleFonts.nunito(
               color: AppColors.textGrey,
               fontWeight: FontWeight.w800,
@@ -677,7 +869,7 @@ class _MainScreenState extends State<MainScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
             child: LinearProgressIndicator(
-              value: item['completed'] / item['lessons'],
+              value: progressVal,
               backgroundColor: const Color(0xFFF0F2F6),
               valueColor: AlwaysStoppedAnimation<Color>(themeColor),
               minHeight: 4,
@@ -807,6 +999,7 @@ class _MainScreenState extends State<MainScreen> {
       onTap: () {
         setState(() {
           _selectedNavIndex = index;
+          _showBottomBar = true;
         });
       },
       child: AnimatedContainer(
