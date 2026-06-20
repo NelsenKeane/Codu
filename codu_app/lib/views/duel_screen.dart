@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/game_models.dart';
 import '../services/user_data_service.dart';
 import '../services/audio_service.dart';
@@ -40,9 +41,18 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   int _streak = 3;
 
   // Opponent details
-  final String _opponentName = "Erica";
-  final int _opponentAvatarIndex = 2; // Female3 (matches user image)
-  final int _opponentTrophies = 155;
+  String _opponentName = "Erica";
+  int _opponentAvatarIndex = 2; // Female3 (matches user image)
+  int _opponentTrophies = 155;
+
+  // Firestore references
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  StreamSubscription<DocumentSnapshot>? _roomSubscription;
+  String? _duelDocId;
+  bool _isHost = false;
+  int _lastOpponentEmoteTime = 0;
+  bool _userFinished = false;
+  bool _opponentFinished = false;
 
   // Matchmaking status strings
   final List<String> _searchStatuses = [
@@ -219,6 +229,10 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     _opponentActionTimer?.cancel();
     _userEmoteTimer?.cancel();
     _opponentEmoteTimer?.cancel();
+    _roomSubscription?.cancel();
+    if (_isHost && _duelDocId != null) {
+      _db.collection('duels').doc(_duelDocId).delete().catchError((e) {});
+    }
     _pulseController.dispose();
     _radarController.dispose();
     _slideController.dispose();
@@ -269,63 +283,244 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   // --- TRANSITIONS & MATCHMAKING FLOW ---
 
-  void _startSearching() {
+  Future<void> _startSearching() async {
     _updateState(DuelState.searching);
     setState(() {
       _searchSeconds = 0;
       _searchStatusText = _searchStatuses[0];
     });
 
+    final String? currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You must be logged in to play!")),
+      );
+      _updateState(DuelState.lobby);
+      return;
+    }
+
     _searchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _searchSeconds++;
-        // Cycle status messages every second
-        _searchStatusText = _searchStatuses[_searchSeconds % _searchStatuses.length];
+      if (mounted) {
+        setState(() {
+          _searchSeconds++;
+          _searchStatusText = _searchStatuses[_searchSeconds % _searchStatuses.length];
+        });
+      }
+    });
+
+    try {
+      // 1. Query for an existing waiting room for the selected language
+      final querySnap = await _db
+          .collection('duels')
+          .where('status', isEqualTo: 'waiting')
+          .where('language', isEqualTo: _selectedLanguage)
+          .limit(1)
+          .get();
+
+      if (querySnap.docs.isNotEmpty) {
+        // Room found! Join as guest
+        final roomDoc = querySnap.docs.first;
+        final roomData = roomDoc.data();
+        
+        if (roomData['hostUid'] != currentUid) {
+          _duelDocId = roomDoc.id;
+          _isHost = false;
+
+          await _db.collection('duels').doc(_duelDocId).update({
+            'status': 'starting',
+            'guestUid': currentUid,
+            'guestName': _displayName,
+            'guestAvatarIndex': _avatarIndex,
+            'guestTrophies': _trophies,
+            'guestScore': 0,
+            'guestQuestionIndex': 0,
+            'guestFinished': false,
+            'guestForfeited': false,
+          });
+
+          _subscribeToRoom();
+          return;
+        }
+      }
+
+      // 2. If no room found or own room was retrieved, create a new room as host
+      final int seed = Random().nextInt(100) + 1;
+      _duelDocId = currentUid;
+      _isHost = true;
+
+      await _db.collection('duels').doc(_duelDocId).set({
+        'status': 'waiting',
+        'language': _selectedLanguage,
+        'questionSeed': seed,
+        'createdAt': FieldValue.serverTimestamp(),
+        'hostUid': currentUid,
+        'hostName': _displayName,
+        'hostAvatarIndex': _avatarIndex,
+        'hostTrophies': _trophies,
+        'hostScore': 0,
+        'hostQuestionIndex': 0,
+        'hostFinished': false,
+        'hostForfeited': false,
+        'guestUid': null,
+        'guestName': null,
+        'guestAvatarIndex': 0,
+        'guestTrophies': 0,
+        'guestScore': 0,
+        'guestQuestionIndex': 0,
+        'guestFinished': false,
+        'guestForfeited': false,
       });
 
-      // Find match after 4 seconds
-      if (_searchSeconds >= 4) {
-        timer.cancel();
-        _triggerMatchFound();
+      _subscribeToRoom();
+
+    } catch (e) {
+      debugPrint("Error starting search: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
       }
+      _cancelSearching();
+    }
+  }
+
+  void _subscribeToRoom() {
+    _roomSubscription?.cancel();
+    if (_duelDocId == null) return;
+
+    _roomSubscription = _db.collection('duels').doc(_duelDocId).snapshots().listen((snapshot) {
+      if (!snapshot.exists || !mounted) return;
+      final data = snapshot.data();
+      if (data == null) return;
+
+      final status = data['status'];
+
+      if (status == 'starting' && _currentState == DuelState.searching) {
+        _searchTimer?.cancel();
+        _triggerMatchFound(data);
+      }
+
+      if (status == 'active' && !_isHost && _currentState == DuelState.matchFound) {
+        _countdownTimer?.cancel();
+        _startDuelGameplayMultiplayer(data);
+      }
+
+      if (_currentState == DuelState.gameplay) {
+        final emoteMap = _isHost ? data['guestEmote'] : data['hostEmote'];
+        final int emoteTime = emoteMap?['time'] ?? 0;
+        final String? emotePath = emoteMap?['svg'];
+
+        setState(() {
+          if (_isHost) {
+            _opponentScorePrevious = _opponentScore;
+            _opponentScore = data['guestScore'] ?? 0;
+            _opponentQuestionsAnswered = data['guestQuestionIndex'] ?? 0;
+            _opponentFinished = data['guestFinished'] ?? false;
+          } else {
+            _opponentScorePrevious = _opponentScore;
+            _opponentScore = data['hostScore'] ?? 0;
+            _opponentQuestionsAnswered = data['hostQuestionIndex'] ?? 0;
+            _opponentFinished = data['hostFinished'] ?? false;
+          }
+
+          if (emotePath != null && emoteTime > _lastOpponentEmoteTime) {
+            _lastOpponentEmoteTime = emoteTime;
+            _triggerOpponentEmote(emotePath);
+          }
+        });
+
+        _checkDuelCompletionMultiplayer(data);
+      }
+    }, onError: (e) {
+      debugPrint("Error in room subscription: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Subscription error: $e")),
+        );
+      }
+      _cancelSearching();
     });
   }
 
-  void _cancelSearching() {
+  Future<void> _cancelSearching() async {
     _searchTimer?.cancel();
+    _roomSubscription?.cancel();
+    if (_isHost && _duelDocId != null) {
+      try {
+        await _db.collection('duels').doc(_duelDocId).delete();
+      } catch (e) {
+        debugPrint("Error deleting room: $e");
+      }
+    }
+    _duelDocId = null;
     _updateState(DuelState.lobby);
   }
 
-  void _triggerMatchFound() {
+  void _triggerMatchFound(Map<String, dynamic> data) {
     _updateState(DuelState.matchFound);
     setState(() {
       _countdownSeconds = 5;
+
+      if (_isHost) {
+        _opponentName = data['guestName'] ?? "Guest";
+        _opponentAvatarIndex = data['guestAvatarIndex'] ?? 0;
+        _opponentTrophies = data['guestTrophies'] ?? 0;
+      } else {
+        _opponentName = data['hostName'] ?? "Host";
+        _opponentAvatarIndex = data['hostAvatarIndex'] ?? 0;
+        _opponentTrophies = data['hostTrophies'] ?? 0;
+      }
     });
 
     _slideController.forward(from: 0.0);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_countdownSeconds > 1) {
-        setState(() {
-          _countdownSeconds--;
-        });
-      } else {
+      if (_countdownSeconds > 0) {
+        if (mounted) {
+          setState(() {
+            _countdownSeconds--;
+          });
+        }
+      }
+      if (_countdownSeconds == 0) {
         timer.cancel();
-        _startDuelGameplay();
+        if (_isHost) {
+          _startDuelGameplayMultiplayer(data);
+        }
       }
     });
   }
 
-  void _cancelMatchFound() {
+  Future<void> _cancelMatchFound() async {
     _countdownTimer?.cancel();
+    _roomSubscription?.cancel();
+    if (_duelDocId != null) {
+      try {
+        if (_isHost) {
+          await _db.collection('duels').doc(_duelDocId).delete();
+        } else {
+          await _db.collection('duels').doc(_duelDocId).update({
+            'status': 'waiting',
+            'guestUid': null,
+            'guestName': null,
+            'guestAvatarIndex': 0,
+            'guestTrophies': 0,
+          });
+        }
+      } catch (e) {
+        debugPrint("Error cancelling match found: $e");
+      }
+    }
+    _duelDocId = null;
     _updateState(DuelState.lobby);
   }
 
-  void _startDuelGameplay() {
+  void _startDuelGameplayMultiplayer(Map<String, dynamic> data) {
     _updateState(DuelState.gameplay);
     AudioService().playMusic('Audio/Game Music.mp3');
 
-    // Initialize 90-second round timer
+    final int seed = data['questionSeed'] ?? 1;
+
     setState(() {
       _roundSecondsLeft = 90;
       _currentQuestionIndex = 0;
@@ -334,73 +529,39 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       _userScorePrevious = 0;
       _opponentScorePrevious = 0;
       _opponentQuestionsAnswered = 0;
+      _opponentFinished = false;
+      _userFinished = false;
       _userEmotePath = null;
       _opponentEmotePath = null;
       _showEmotePicker = false;
+      _lastOpponentEmoteTime = 0;
 
-      // Load questions dynamically for the selected subject
-      _questions = QuestionBank.getQuestionsForLevel(1, _selectedLanguage).sublist(0, 5);
+      _questions = QuestionBank.getQuestionsForLevel(seed, _selectedLanguage).sublist(0, 5);
     });
 
     _clearSlots();
 
     _roundTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_roundSecondsLeft > 1) {
-        setState(() {
-          _roundSecondsLeft--;
-        });
+        if (mounted) {
+          setState(() {
+            _roundSecondsLeft--;
+          });
+        }
         if (_roundSecondsLeft == 5) {
           AudioService().playTimeRunningOut();
         }
       } else {
         timer.cancel();
-        _endDuel();
+        _endDuelMultiplayer(timeOut: true);
       }
     });
 
-    // Opponent starts Erica simulation
-    _startOpponentSimulation();
+    if (_isHost && _duelDocId != null) {
+      _db.collection('duels').doc(_duelDocId).update({'status': 'active'}).catchError((e) {});
+    }
 
-    // Trigger Erica saying Hi at the start
-    _triggerOpponentEmote("assets/images/CoduExpression/codu hi.svg");
-  }
-
-  void _startOpponentSimulation() {
-    _opponentActionTimer?.cancel();
-    final Random rand = Random();
-    _scheduleNextOpponentAction(rand);
-  }
-
-  void _scheduleNextOpponentAction(Random rand) {
-    if (_currentState != DuelState.gameplay) return;
-
-    // Answer every 8 to 12 seconds
-    final delaySeconds = rand.nextInt(5) + 8;
-
-    _opponentActionTimer = Timer(Duration(seconds: delaySeconds), () {
-      if (_currentState != DuelState.gameplay) return;
-
-      setState(() {
-        _opponentQuestionsAnswered++;
-        // 80% chance Erica gets it correct
-        if (rand.nextDouble() < 0.8) {
-          _opponentScorePrevious = _opponentScore;
-          _opponentScore += 20;
-
-          // Erica celebrates!
-          _triggerOpponentEmote("assets/images/CoduExpression/codu YEY.svg");
-        } else {
-          // Erica got it wrong and sends a cry/angry emote
-          _triggerOpponentEmote("assets/images/CoduExpression/codu cry.svg");
-        }
-      });
-
-      if (_opponentQuestionsAnswered < 5) {
-        _scheduleNextOpponentAction(rand);
-      } else {
-        _checkDuelCompletion();
-      }
-    });
+    _triggerUserEmote("assets/images/CoduExpression/codu hi.svg");
   }
 
   // --- GAME EVALUATION ---
@@ -494,14 +655,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         _userScorePrevious = _userScore;
         _userScore += 20;
 
-        // User gets it right: user emotes YEY
         _triggerUserEmote("assets/images/CoduExpression/codu YEY.svg");
       } else {
-        // User gets it wrong: user emotes sad, Erica emotes hi/YEY
         _triggerUserEmote("assets/images/CoduExpression/codu sad.svg");
-        if (Random().nextBool()) {
-          _triggerOpponentEmote("assets/images/CoduExpression/codu hi.svg");
-        }
       }
     });
 
@@ -510,6 +666,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     } else {
       AudioService().playSfx('Audio/Wrong.mp3');
     }
+
+    _syncUserProgressToFirestore();
   }
 
   void _onContinueGameplay() {
@@ -518,56 +676,43 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         _currentQuestionIndex++;
         _clearSlots();
       });
+      _syncUserProgressToFirestore();
     } else {
-      _checkDuelCompletion();
-    }
-  }
-
-  void _checkDuelCompletion() {
-    final bool userFinished = _currentQuestionIndex >= 4 && _isAnswerChecked;
-    final bool opponentFinished = _opponentQuestionsAnswered >= 5;
-
-    if (userFinished && opponentFinished) {
-      _endDuel();
-    } else if (userFinished && !opponentFinished) {
-      // Opponent fast-forwards
-      _opponentActionTimer?.cancel();
-      final Random rand = Random();
-
-      _opponentActionTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) {
-        if (_currentState != DuelState.gameplay) {
-          timer.cancel();
-          return;
-        }
-        setState(() {
-          _opponentQuestionsAnswered++;
-          if (rand.nextDouble() < 0.8) {
-            _opponentScorePrevious = _opponentScore;
-            _opponentScore += 20;
-            _triggerOpponentEmote("assets/images/CoduExpression/codu YEY.svg");
-          } else {
-            _triggerOpponentEmote("assets/images/CoduExpression/codu sad.svg");
-          }
-        });
-
-        if (_opponentQuestionsAnswered >= 5) {
-          timer.cancel();
-          _endDuel();
-        }
+      setState(() {
+        _userFinished = true;
       });
+      _syncUserFinishedToFirestore();
     }
   }
 
-  Future<void> _endDuel() async {
+  void _checkDuelCompletionMultiplayer(Map<String, dynamic> data) {
+    if (_currentState != DuelState.gameplay) return;
+
+    final bool hostFinished = data['hostFinished'] == true || data['hostForfeited'] == true;
+    final bool guestFinished = data['guestFinished'] == true || data['guestForfeited'] == true;
+
+    final bool opponentForfeited = _isHost ? (data['guestForfeited'] == true) : (data['hostForfeited'] == true);
+
+    if (opponentForfeited) {
+      setState(() {
+        _opponentScore = 0;
+        _userScore = 100; // ensure victory
+      });
+      _endDuelMultiplayer();
+    } else if (hostFinished && guestFinished) {
+      _endDuelMultiplayer();
+    }
+  }
+
+  Future<void> _endDuelMultiplayer({bool timeOut = false}) async {
     _roundTimer?.cancel();
-    _opponentActionTimer?.cancel();
+    _roomSubscription?.cancel();
     AudioService().stopMusic();
     AudioService().stopTimeRunningOut();
 
     int delta = 0;
     if (_userScore > _opponentScore) {
       delta = 30;
-      // Start confetti if victory
       _confettiController.repeat();
       AudioService().playSfx('Audio/Completed.mp3');
     } else if (_userScore < _opponentScore) {
@@ -586,6 +731,52 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     });
 
     _updateState(DuelState.results);
+
+    // Clean up room doc from Firestore
+    if (_duelDocId != null) {
+      try {
+        await _db.collection('duels').doc(_duelDocId).delete();
+      } catch (e) {
+        debugPrint("Error deleting room doc on end: $e");
+      }
+    }
+    _duelDocId = null;
+  }
+
+  Future<void> _syncUserProgressToFirestore() async {
+    if (_duelDocId == null) return;
+    try {
+      if (_isHost) {
+        await _db.collection('duels').doc(_duelDocId).update({
+          'hostScore': _userScore,
+          'hostQuestionIndex': _currentQuestionIndex + (_isAnswerChecked && _isAnswerCorrect ? 1 : 0),
+        });
+      } else {
+        await _db.collection('duels').doc(_duelDocId).update({
+          'guestScore': _userScore,
+          'guestQuestionIndex': _currentQuestionIndex + (_isAnswerChecked && _isAnswerCorrect ? 1 : 0),
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing user progress: $e");
+    }
+  }
+
+  Future<void> _syncUserFinishedToFirestore() async {
+    if (_duelDocId == null) return;
+    try {
+      if (_isHost) {
+        await _db.collection('duels').doc(_duelDocId).update({
+          'hostFinished': true,
+        });
+      } else {
+        await _db.collection('duels').doc(_duelDocId).update({
+          'guestFinished': true,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing user finished: $e");
+    }
   }
 
   Future<bool> _confirmForfeit() async {
@@ -624,10 +815,29 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   Future<void> _forfeitMatch() async {
     _roundTimer?.cancel();
-    _opponentActionTimer?.cancel();
+    _roomSubscription?.cancel();
     AudioService().stopMusic();
     AudioService().stopTimeRunningOut();
     AudioService().playSfx('Audio/CompletedLose.mp3');
+
+    if (_duelDocId != null) {
+      try {
+        if (_isHost) {
+          await _db.collection('duels').doc(_duelDocId).update({
+            'hostForfeited': true,
+            'hostFinished': true,
+          });
+        } else {
+          await _db.collection('duels').doc(_duelDocId).update({
+            'guestForfeited': true,
+            'guestFinished': true,
+          });
+        }
+      } catch (e) {
+        debugPrint("Error forfeiting match: $e");
+      }
+    }
+
     int newTrophies = max(0, _trophies - 15);
     await UserDataService().saveTrophies(newTrophies);
     setState(() {
@@ -638,13 +848,32 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     _updateState(DuelState.results);
   }
 
-  // --- EMOTES REACTION TRIGGER MECHANISM ---
-
-  void _triggerUserEmote(String assetPath) {
+  Future<void> _triggerUserEmote(String assetPath) async {
     _userEmoteTimer?.cancel();
     setState(() {
       _userEmotePath = assetPath;
     });
+
+    if (_duelDocId != null) {
+      try {
+        final emoteData = {
+          'svg': assetPath,
+          'time': DateTime.now().millisecondsSinceEpoch,
+        };
+        if (_isHost) {
+          await _db.collection('duels').doc(_duelDocId).update({
+            'hostEmote': emoteData,
+          });
+        } else {
+          await _db.collection('duels').doc(_duelDocId).update({
+            'guestEmote': emoteData,
+          });
+        }
+      } catch (e) {
+        debugPrint("Error sending emote: $e");
+      }
+    }
+
     _userEmoteTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
         setState(() {
@@ -652,20 +881,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         });
       }
     });
-
-    // 50% chance Erica responds to user emote
-    if (assetPath != "assets/images/CoduExpression/codu cry.svg" && Random().nextBool()) {
-      _opponentEmoteTimer?.cancel();
-      _opponentEmoteTimer = Timer(const Duration(milliseconds: 1500), () {
-        final rand = Random();
-        final ericaReactions = [
-          "assets/images/CoduExpression/codu hi.svg",
-          "assets/images/CoduExpression/codu thinking.svg",
-          "assets/images/CoduExpression/codu angry.svg"
-        ];
-        _triggerOpponentEmote(ericaReactions[rand.nextInt(ericaReactions.length)]);
-      });
-    }
   }
 
   void _triggerOpponentEmote(String assetPath) {
@@ -1400,7 +1615,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      "Match starts in $_countdownSeconds seconds",
+                      _countdownSeconds == 0
+                          ? "Starting match..."
+                          : "Match starts in $_countdownSeconds seconds",
                       style: GoogleFonts.nunito(
                         color: Colors.white,
                         fontSize: 15,
@@ -1893,7 +2110,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                           ),
 
                           // Opponent finished loading overlay
-                          if (_currentQuestionIndex >= 4 && _isAnswerChecked && _opponentQuestionsAnswered < 5)
+                          if (_userFinished && !_opponentFinished)
                             Container(
                               color: Colors.black.withValues(alpha: 0.65),
                               child: Center(
@@ -1921,7 +2138,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        "Erica is answering question ${_opponentQuestionsAnswered + 1}/5",
+                                        "$_opponentName is answering question ${_opponentQuestionsAnswered + 1}/5",
                                         style: GoogleFonts.nunito(
                                           color: const Color(0xFF9AAEC4),
                                           fontSize: 13,
@@ -2280,14 +2497,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     Color bgGradientStart = const Color(0xFF2ECC71);
     Color bgGradientEnd = const Color(0xFF27AE60);
     String headerText = "Victory!";
-    String scoreSubtitle = "You dominated Erica in the duel!";
+    String scoreSubtitle = "You dominated $_opponentName in the duel!";
     String iconString = "👑";
 
     if (isDefeat) {
       bgGradientStart = const Color(0xFF9E2A2B);
       bgGradientEnd = const Color(0xFF5E1914);
       headerText = "Defeat";
-      scoreSubtitle = "Erica was faster this time.";
+      scoreSubtitle = "$_opponentName was faster this time.";
       iconString = "😢";
     } else if (!isVictory && !isDefeat) {
       bgGradientStart = const Color(0xFFF39C12);
