@@ -26,45 +26,106 @@ class DuelScreen extends StatefulWidget {
 class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   DuelState _currentState = DuelState.lobby;
 
-  // User details
+  // Selected language for the duel
+  String _selectedLanguage = "Python";
+
+  // User stats
   String _displayName = "Alex";
   int _trophies = 150;
   int _avatarIndex = 0;
+  int _wins = 12;
+  int _losses = 8;
+  int _streak = 3;
 
-  // Opponent details (Simulated Erica)
+  // Opponent details
   final String _opponentName = "Erica";
   final int _opponentAvatarIndex = 2; // Female3 (matches user image)
   final int _opponentTrophies = 155;
 
-  // Matchmaking variables
+  // Matchmaking status strings
+  final List<String> _searchStatuses = [
+    "Reaching Codu matchmaking servers...",
+    "Searching for opponent in range...",
+    "Matching trophy level...",
+    "Syncing game lobby latency...",
+  ];
+  String _searchStatusText = "Connecting...";
+
+  // Timers
   Timer? _searchTimer;
   int _searchSeconds = 0;
 
-  // Match found countdown
   Timer? _countdownTimer;
   int _countdownSeconds = 5;
 
-  // Gameplay variables
-  late List<CodingQuestion> _questions;
-  int _currentQuestionIndex = 0;
+  Timer? _roundTimer;
+  int _roundSecondsLeft = 90;
+
+  Timer? _opponentActionTimer;
+  int _opponentQuestionsAnswered = 0;
+
+  Timer? _userEmoteTimer;
+  Timer? _opponentEmoteTimer;
+
+  // Scores
   int _userScore = 0;
   int _opponentScore = 0;
+  int _userScorePrevious = 0;
+  int _opponentScorePrevious = 0;
+
+  // Emotes state
+  String? _userEmotePath;
+  String? _opponentEmotePath;
+  bool _showEmotePicker = false;
+
+  // Gameplay quiz
+  late List<CodingQuestion> _questions;
+  int _currentQuestionIndex = 0;
   bool _isAnswerChecked = false;
   bool _isAnswerCorrect = false;
   final Map<String, int?> _slotContents = {};
 
-  // Opponent simulation timers
-  Timer? _opponentActionTimer;
-  int _opponentQuestionsAnswered = 0;
-
-  // Result variable
   int _trophyDelta = 0;
 
-  // Animation controllers
+  // Animation Controllers
   late AnimationController _pulseController;
-  late AnimationController _radialController;
+  late AnimationController _radarController;
+  late AnimationController _slideController;
+  late AnimationController _confettiController;
 
-  // Avatars mapping
+  late Animation<Offset> _userCardSlide;
+  late Animation<Offset> _opponentCardSlide;
+
+  // Confetti particles for Victory screen
+  final List<ConfettiParticle> _confettiParticles = [];
+
+  final List<Map<String, dynamic>> _languagesList = [
+    {
+      'lang': 'Python',
+      'icon': '🐍',
+      'color1': const Color(0xFF8F93EA),
+      'color2': const Color(0xFF7076E3),
+    },
+    {
+      'lang': 'Javascript',
+      'icon': 'JS',
+      'color1': const Color(0xFFFFD56B),
+      'color2': const Color(0xFFE5A93B),
+    },
+    {
+      'lang': 'C++',
+      'icon': 'C+',
+      'color1': const Color(0xFF7A9EFF),
+      'color2': const Color(0xFF5672E5),
+    },
+    {
+      'lang': 'Java',
+      'icon': '☕',
+      'color1': const Color(0xFFFF8B8B),
+      'color2': const Color(0xFFE55353),
+    },
+  ];
+
   final List<Map<String, dynamic>> _avatars = [
     {'svgPath': 'assets/images/Characters/Female1.svg', 'bgColor': const Color(0xFFFFD56B), 'name': 'Female 1'},
     {'svgPath': 'assets/images/Characters/Female2.svg', 'bgColor': const Color(0xFF8F93EA), 'name': 'Female 2'},
@@ -74,23 +135,74 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     {'svgPath': 'assets/images/Characters/Male3.svg', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Male 3'},
   ];
 
+  final List<Map<String, String>> _emotes = [
+    {'name': 'Hi', 'svg': 'assets/images/CoduExpression/codu hi.svg'},
+    {'name': 'Thinking', 'svg': 'assets/images/CoduExpression/codu thinking.svg'},
+    {'name': 'Angry', 'svg': 'assets/images/CoduExpression/codu angry.svg'},
+    {'name': 'Cry', 'svg': 'assets/images/CoduExpression/codu cry.svg'},
+    {'name': 'YEY', 'svg': 'assets/images/CoduExpression/codu YEY.svg'},
+    {'name': 'Broken', 'svg': 'assets/images/CoduExpression/codu broken.svg'},
+    {'name': 'Sad', 'svg': 'assets/images/CoduExpression/codu sad.svg'},
+  ];
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
 
+    // Pulse animation for buttons and radar waves
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
-    _radialController = AnimationController(
+    // Radar scan spinning
+    _radarController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat();
 
-    // Load Python level 1 questions for the duel
-    _questions = QuestionBank.getQuestionsForLevel(1, 'Python').sublist(0, 5);
+    // Slide-in animations for Match Found screen
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    _userCardSlide = Tween<Offset>(
+      begin: const Offset(-1.5, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutBack,
+    ));
+
+    _opponentCardSlide = Tween<Offset>(
+      begin: const Offset(1.5, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutBack,
+    ));
+
+    // Confetti animation for Results screen
+    _confettiController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+
+    // Generate random confetti particles
+    final rand = Random();
+    final List<Color> colors = [Colors.red, Colors.green, Colors.blue, Colors.yellow, Colors.orange, Colors.purple, Colors.pink];
+    for (int i = 0; i < 28; i++) {
+      _confettiParticles.add(ConfettiParticle(
+        x: rand.nextDouble() * 360,
+        y: -20.0 - rand.nextDouble() * 100,
+        speed: 1.0 + rand.nextDouble() * 1.5,
+        size: 8.0 + rand.nextDouble() * 10.0,
+        color: colors[rand.nextInt(colors.length)],
+        angle: rand.nextDouble() * pi,
+      ));
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onShowBottomBarChanged?.call(true);
@@ -101,9 +213,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   void dispose() {
     _searchTimer?.cancel();
     _countdownTimer?.cancel();
+    _roundTimer?.cancel();
     _opponentActionTimer?.cancel();
+    _userEmoteTimer?.cancel();
+    _opponentEmoteTimer?.cancel();
     _pulseController.dispose();
-    _radialController.dispose();
+    _radarController.dispose();
+    _slideController.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -112,6 +229,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       setState(() {
         _currentState = state;
       });
+      // Hide bottom bar during match transitions (everything except Lobby)
       widget.onShowBottomBarChanged?.call(state == DuelState.lobby);
     }
   }
@@ -131,19 +249,23 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     }
   }
 
-  // --- TRANSITIONS ---
+  // --- TRANSITIONS & MATCHMAKING FLOW ---
 
   void _startSearching() {
     _updateState(DuelState.searching);
     setState(() {
       _searchSeconds = 0;
+      _searchStatusText = _searchStatuses[0];
     });
 
     _searchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         _searchSeconds++;
+        // Cycle status messages every second
+        _searchStatusText = _searchStatuses[_searchSeconds % _searchStatuses.length];
       });
-      // Simulate finding a match after 4 seconds
+
+      // Find match after 4 seconds
       if (_searchSeconds >= 4) {
         timer.cancel();
         _triggerMatchFound();
@@ -161,6 +283,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     setState(() {
       _countdownSeconds = 5;
     });
+
+    _slideController.forward(from: 0.0);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_countdownSeconds > 1) {
@@ -181,48 +305,83 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   void _startDuelGameplay() {
     _updateState(DuelState.gameplay);
+
+    // Initialize 90-second round timer
     setState(() {
+      _roundSecondsLeft = 90;
       _currentQuestionIndex = 0;
       _userScore = 0;
       _opponentScore = 0;
+      _userScorePrevious = 0;
+      _opponentScorePrevious = 0;
       _opponentQuestionsAnswered = 0;
+      _userEmotePath = null;
+      _opponentEmotePath = null;
+      _showEmotePicker = false;
+
+      // Load questions dynamically for the selected subject
+      _questions = QuestionBank.getQuestionsForLevel(1, _selectedLanguage).sublist(0, 5);
     });
+
     _clearSlots();
+
+    _roundTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_roundSecondsLeft > 1) {
+        setState(() {
+          _roundSecondsLeft--;
+        });
+      } else {
+        timer.cancel();
+        _endDuel();
+      }
+    });
+
+    // Opponent starts Erica simulation
     _startOpponentSimulation();
+
+    // Trigger Erica saying Hi at the start
+    _triggerOpponentEmote("assets/images/CoduExpression/codu hi.svg");
   }
 
   void _startOpponentSimulation() {
     _opponentActionTimer?.cancel();
-    // Opponent Erica answers a question every 6 to 10 seconds
     final Random rand = Random();
-    
     _scheduleNextOpponentAction(rand);
   }
 
   void _scheduleNextOpponentAction(Random rand) {
     if (_currentState != DuelState.gameplay) return;
-    
-    final delaySeconds = rand.nextInt(5) + 6; // 6 to 10 seconds
-    
+
+    // Answer every 8 to 12 seconds
+    final delaySeconds = rand.nextInt(5) + 8;
+
     _opponentActionTimer = Timer(Duration(seconds: delaySeconds), () {
       if (_currentState != DuelState.gameplay) return;
 
       setState(() {
         _opponentQuestionsAnswered++;
-        // 80% chance Erica gets it correct (+20 points)
+        // 80% chance Erica gets it correct
         if (rand.nextDouble() < 0.8) {
+          _opponentScorePrevious = _opponentScore;
           _opponentScore += 20;
+
+          // Erica celebrates!
+          _triggerOpponentEmote("assets/images/CoduExpression/codu YEY.svg");
+        } else {
+          // Erica got it wrong and sends a cry/angry emote
+          _triggerOpponentEmote("assets/images/CoduExpression/codu cry.svg");
         }
       });
 
       if (_opponentQuestionsAnswered < 5) {
         _scheduleNextOpponentAction(rand);
       } else {
-        // Opponent finished
         _checkDuelCompletion();
       }
     });
   }
+
+  // --- GAME EVALUATION ---
 
   void _clearSlots() {
     _slotContents.clear();
@@ -242,7 +401,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
     final question = _questions[_currentQuestionIndex];
 
-    // Check if it's already placed
     String? alreadyPlacedSlot;
     _slotContents.forEach((key, value) {
       if (value == choiceIndex) {
@@ -255,7 +413,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         _slotContents[alreadyPlacedSlot!] = null;
       });
     } else {
-      // Find first empty slot
       String? firstEmptySlot;
       for (var line in question.codeLines) {
         for (var segment in line) {
@@ -280,7 +437,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
     final question = _questions[_currentQuestionIndex];
 
-    // Check if all slots filled
     bool allFilled = true;
     _slotContents.forEach((key, value) {
       if (value == null) allFilled = false;
@@ -289,7 +445,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     if (!allFilled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Fill all the blanks first!"),
+          content: Text("Fill all code blanks first!"),
           backgroundColor: Color(0xFFFFB020),
           behavior: SnackBarBehavior.floating,
         ),
@@ -297,7 +453,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // Evaluate
     bool correct = true;
     _slotContents.forEach((slotId, valueIndex) {
       if (valueIndex == null) {
@@ -314,7 +469,17 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       _isAnswerChecked = true;
       _isAnswerCorrect = correct;
       if (correct) {
-        _userScore += 20; // +20 points for correct
+        _userScorePrevious = _userScore;
+        _userScore += 20;
+
+        // User gets it right: user emotes YEY
+        _triggerUserEmote("assets/images/CoduExpression/codu YEY.svg");
+      } else {
+        // User gets it wrong: user emotes sad, Erica emotes hi/YEY
+        _triggerUserEmote("assets/images/CoduExpression/codu sad.svg");
+        if (Random().nextBool()) {
+          _triggerOpponentEmote("assets/images/CoduExpression/codu hi.svg");
+        }
       }
     });
   }
@@ -326,7 +491,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         _clearSlots();
       });
     } else {
-      // User finished all questions!
       _checkDuelCompletion();
     }
   }
@@ -338,11 +502,11 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     if (userFinished && opponentFinished) {
       _endDuel();
     } else if (userFinished && !opponentFinished) {
-      // Fast-forward opponent remaining questions so user doesn't wait long
+      // Opponent fast-forwards
       _opponentActionTimer?.cancel();
       final Random rand = Random();
-      
-      _opponentActionTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+
+      _opponentActionTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) {
         if (_currentState != DuelState.gameplay) {
           timer.cancel();
           return;
@@ -350,7 +514,11 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         setState(() {
           _opponentQuestionsAnswered++;
           if (rand.nextDouble() < 0.8) {
+            _opponentScorePrevious = _opponentScore;
             _opponentScore += 20;
+            _triggerOpponentEmote("assets/images/CoduExpression/codu YEY.svg");
+          } else {
+            _triggerOpponentEmote("assets/images/CoduExpression/codu sad.svg");
           }
         });
 
@@ -363,16 +531,18 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _endDuel() async {
+    _roundTimer?.cancel();
     _opponentActionTimer?.cancel();
 
-    // Determine trophy changes
     int delta = 0;
     if (_userScore > _opponentScore) {
-      delta = 30; // Win
+      delta = 30;
+      // Start confetti if victory
+      _confettiController.repeat();
     } else if (_userScore < _opponentScore) {
-      delta = -15; // Lose
+      delta = -15;
     } else {
-      delta = 5; // Draw reward
+      delta = 5;
     }
 
     int newTrophies = max(0, _trophies + delta);
@@ -381,6 +551,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     setState(() {
       _trophyDelta = delta;
     });
+
     _updateState(DuelState.results);
   }
 
@@ -419,6 +590,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _forfeitMatch() async {
+    _roundTimer?.cancel();
     _opponentActionTimer?.cancel();
     int newTrophies = max(0, _trophies - 15);
     await UserDataService().saveTrophies(newTrophies);
@@ -430,7 +602,51 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     _updateState(DuelState.results);
   }
 
-  // --- UI BUILDERS ---
+  // --- EMOTES REACTION TRIGGER MECHANISM ---
+
+  void _triggerUserEmote(String assetPath) {
+    _userEmoteTimer?.cancel();
+    setState(() {
+      _userEmotePath = assetPath;
+    });
+    _userEmoteTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) {
+        setState(() {
+          _userEmotePath = null;
+        });
+      }
+    });
+
+    // 50% chance Erica responds to user emote
+    if (assetPath != "assets/images/CoduExpression/codu cry.svg" && Random().nextBool()) {
+      _opponentEmoteTimer?.cancel();
+      _opponentEmoteTimer = Timer(const Duration(milliseconds: 1500), () {
+        final rand = Random();
+        final ericaReactions = [
+          "assets/images/CoduExpression/codu hi.svg",
+          "assets/images/CoduExpression/codu thinking.svg",
+          "assets/images/CoduExpression/codu angry.svg"
+        ];
+        _triggerOpponentEmote(ericaReactions[rand.nextInt(ericaReactions.length)]);
+      });
+    }
+  }
+
+  void _triggerOpponentEmote(String assetPath) {
+    _opponentEmoteTimer?.cancel();
+    setState(() {
+      _opponentEmotePath = assetPath;
+    });
+    _opponentEmoteTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) {
+        setState(() {
+          _opponentEmotePath = null;
+        });
+      }
+    });
+  }
+
+  // --- UI LAYOUT BUILDERS ---
 
   @override
   Widget build(BuildContext context) {
@@ -448,16 +664,15 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     }
   }
 
-  // 1. Lobby View
+  // 1. LOBBY VIEW
   Widget _buildLobbyView() {
     return Container(
       color: const Color(0xFFF0F2F6),
       child: Stack(
         children: [
-          // Background soft pattern
           Positioned.fill(
             child: Opacity(
-              opacity: 0.25,
+              opacity: 0.2,
               child: SvgPicture.asset(
                 'assets/images/codu_background_pattern_mobile_soft.svg',
                 fit: BoxFit.cover,
@@ -466,15 +681,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
           ),
           SafeArea(
             child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Controller 3D/Premium Logo card
+                    // Visual Controller Header
                     Container(
-                      width: 140,
-                      height: 140,
+                      width: 110,
+                      height: 110,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF56CCF2), Color(0xFF2F80ED)],
@@ -484,9 +698,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF2F80ED).withValues(alpha: 0.4),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
+                            color: const Color(0xFF2F80ED).withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
@@ -494,103 +708,224 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       child: const Icon(
                         Icons.sports_esports_rounded,
                         color: Colors.white,
-                        size: 72,
+                        size: 58,
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    // Title
+                    const SizedBox(height: 20),
                     Text(
-                      "Python Coding Duel",
+                      "Coding Duel",
                       style: GoogleFonts.nunito(
                         color: const Color(0xFF1E2A38),
-                        fontSize: 28,
+                        fontSize: 26,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
-                      "Test your speed and accuracy against online developers!",
+                      "Solve faster than your opponent to win trophies!",
                       textAlign: TextAlign.center,
                       style: GoogleFonts.nunito(
                         color: const Color(0xFF9AAEC4),
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 24),
 
-                    // Trophy Box (curated theme)
+                    // Trophies & Stats Box
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                        borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
+                            blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      child: Column(
                         children: [
-                          const Text(
-                            "🏆",
-                            style: TextStyle(fontSize: 28),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                "YOUR TROPHIES",
-                                style: GoogleFonts.nunito(
-                                  color: const Color(0xFF9AAEC4),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.0,
-                                ),
+                              const Text("🏆", style: TextStyle(fontSize: 32)),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "YOUR TROPHIES",
+                                    style: GoogleFonts.nunito(
+                                      color: const Color(0xFF9AAEC4),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                  Text(
+                                    "$_trophies",
+                                    style: GoogleFonts.nunito(
+                                      color: const Color(0xFF1E2A38),
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                "$_trophies",
-                                style: GoogleFonts.nunito(
-                                  color: const Color(0xFF1E2A38),
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.0),
+                            child: Divider(color: Color(0xFFE2E8F0)),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildStatItem("WINS", "$_wins", Colors.green),
+                              _buildStatItem("LOSSES", "$_losses", Colors.redAccent),
+                              _buildStatItem("STREAK", "🔥 $_streak", Colors.orange),
                             ],
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 28),
 
-                    const SizedBox(height: 48),
-
-                    // Find Match 3D Button
-                    SizedBox(
-                      width: 240,
-                      child: Duo3dButton(
-                        faceColor: const Color(0xFFFFB020),
-                        shadowColor: const Color(0xFFD88900),
-                        height: 56,
-                        borderRadius: 28,
-                        onPressed: _startSearching,
+                    // Language Selection Carousel Header
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4.0),
                         child: Text(
-                          "FIND MATCH",
+                          "Choose Subject",
                           style: GoogleFonts.nunito(
-                            color: Colors.white,
-                            fontSize: 20,
+                            color: const Color(0xFF1E2A38),
+                            fontSize: 18,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 1.0,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 100), // Bottom navigation offset
+                    const SizedBox(height: 12),
+
+                    // Horizontal Language selection carousel
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _languagesList.length,
+                        itemBuilder: (context, index) {
+                          final item = _languagesList[index];
+                          final bool isSelected = _selectedLanguage == item['lang'];
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedLanguage = item['lang'];
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 110,
+                              margin: const EdgeInsets.only(right: 12, bottom: 8, top: 4),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [item['color1'], item['color2']],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: isSelected
+                                    ? Border.all(color: Colors.white, width: 3)
+                                    : null,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: item['color2'].withValues(alpha: isSelected ? 0.5 : 0.25),
+                                    blurRadius: isSelected ? 8 : 4,
+                                    offset: Offset(0, isSelected ? 4 : 2),
+                                  ),
+                                ],
+                              ),
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    right: -10,
+                                    bottom: -10,
+                                    child: Opacity(
+                                      opacity: 0.15,
+                                      child: Text(
+                                        item['icon'],
+                                        style: const TextStyle(fontSize: 54),
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          item['icon'],
+                                          style: const TextStyle(fontSize: 22),
+                                        ),
+                                        Text(
+                                          item['lang'],
+                                          style: GoogleFonts.nunito(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    const Positioned(
+                                      top: 6,
+                                      right: 6,
+                                      child: Icon(
+                                        Icons.check_circle_rounded,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+
+                    // Find Match Pulsing Button
+                    ScaleTransition(
+                      scale: Tween<double>(begin: 0.98, end: 1.02).animate(_pulseController),
+                      child: SizedBox(
+                        width: 220,
+                        child: Duo3dButton(
+                          faceColor: const Color(0xFFFFB020),
+                          shadowColor: const Color(0xFFD88900),
+                          height: 54,
+                          borderRadius: 27,
+                          onPressed: _startSearching,
+                          child: Text(
+                            "FIND MATCH",
+                            style: GoogleFonts.nunito(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -601,7 +936,33 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 2. Searching/Matchmaking View
+  // Helper stats item
+  Widget _buildStatItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.nunito(
+            color: color,
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.nunito(
+            color: const Color(0xFF9AAEC4),
+            fontSize: 9,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 2. SEARCHING VIEW
   Widget _buildSearchingView() {
     return Container(
       color: const Color(0xFFF0F2F6),
@@ -609,7 +970,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         children: [
           Positioned.fill(
             child: Opacity(
-              opacity: 0.25,
+              opacity: 0.2,
               child: SvgPicture.asset(
                 'assets/images/codu_background_pattern_mobile_soft.svg',
                 fit: BoxFit.cover,
@@ -623,18 +984,18 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Spinning Radar Matchmaking Visual
+                    // Spinning Radar with Waves
                     Stack(
                       alignment: Alignment.center,
                       children: [
                         // Pulsing outer ring
                         ScaleTransition(
-                          scale: Tween<double>(begin: 1.0, end: 1.5).animate(_pulseController),
+                          scale: Tween<double>(begin: 1.0, end: 1.6).animate(_pulseController),
                           child: FadeTransition(
-                            opacity: Tween<double>(begin: 0.4, end: 0.0).animate(_pulseController),
+                            opacity: Tween<double>(begin: 0.5, end: 0.0).animate(_pulseController),
                             child: Container(
-                              width: 150,
-                              height: 150,
+                              width: 160,
+                              height: 160,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: const Color(0xFF56CCF2), width: 3),
@@ -642,97 +1003,112 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-                        // Spinning line circle
+                        // Secondary outer wave
+                        ScaleTransition(
+                          scale: Tween<double>(begin: 1.0, end: 1.3).animate(
+                            CurvedAnimation(parent: _pulseController, curve: const Interval(0.2, 1.0)),
+                          ),
+                          child: FadeTransition(
+                            opacity: Tween<double>(begin: 0.3, end: 0.0).animate(
+                              CurvedAnimation(parent: _pulseController, curve: const Interval(0.2, 1.0)),
+                            ),
+                            child: Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF56CCF2), width: 2),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Spinning Radar sweep
                         RotationTransition(
-                          turns: _radialController,
+                          turns: _radarController,
                           child: Container(
-                            width: 120,
-                            height: 120,
+                            width: 110,
+                            height: 110,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: SweepGradient(
                                 colors: [
-                                  const Color(0xFF56CCF2).withValues(alpha: 0.1),
+                                  const Color(0xFF56CCF2).withValues(alpha: 0.05),
                                   const Color(0xFF56CCF2),
                                 ],
                               ),
                             ),
                           ),
                         ),
-                        // Inner solid circle with search icon
+                        // Solid inner status circle
                         Container(
-                          width: 90,
-                          height: 90,
+                          width: 84,
+                          height: 84,
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              ),
+                              BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
                             ],
                           ),
                           child: const Icon(
                             Icons.youtube_searched_for_rounded,
                             color: Color(0xFF2F80ED),
-                            size: 40,
+                            size: 38,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 40),
-                    // Status text
+                    const SizedBox(height: 48),
+
+                    // Status and language info
                     Text(
-                      "Searching for opponent...",
+                      _searchStatusText,
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.nunito(
                         color: const Color(0xFF1E2A38),
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    // Elapsed timer
+                    const SizedBox(height: 6),
+                    Text(
+                      "Subject: $_selectedLanguage",
+                      style: GoogleFonts.nunito(
+                        color: const Color(0xFF2F80ED),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       _formatTimer(_searchSeconds),
                       style: GoogleFonts.firaCode(
                         color: const Color(0xFF9AAEC4),
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Estimated wait time: < 10s",
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFF9AAEC4),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 64),
 
-                    // Cancel Button
+                    // Cancel
                     SizedBox(
-                      width: 180,
+                      width: 160,
                       child: Duo3dButton(
                         faceColor: const Color(0xFFE55353),
                         shadowColor: const Color(0xFFB83C3C),
-                        height: 48,
-                        borderRadius: 24,
+                        height: 46,
+                        borderRadius: 23,
                         onPressed: _cancelSearching,
                         child: Text(
                           "CANCEL",
                           style: GoogleFonts.nunito(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 100),
                   ],
                 ),
               ),
@@ -743,7 +1119,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 3. Match Found View (Countdown)
+  // 3. MATCH FOUND VIEW (Countdown and Slide entry)
   Widget _buildMatchFoundView() {
     final Map<String, dynamic> activeAvatar = _avatars[_avatarIndex];
     final Map<String, dynamic> opponentAvatar = _avatars[_opponentAvatarIndex];
@@ -752,7 +1128,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       backgroundColor: const Color(0xFF4AC4FF),
       body: Stack(
         children: [
-          // Background soft pattern
           Positioned.fill(
             child: Opacity(
               opacity: 0.15,
@@ -765,231 +1140,213 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
           SafeArea(
             child: Column(
               children: [
-                // Back Button (cancels match)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 26),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 24),
                       onPressed: _cancelMatchFound,
                     ),
                   ),
                 ),
                 const Spacer(flex: 1),
 
-                // Match Found Title
                 Text(
                   "Match Found!",
                   style: GoogleFonts.nunito(
                     color: Colors.white,
-                    fontSize: 32,
+                    fontSize: 30,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const Spacer(flex: 2),
 
-                // Players Cards (Vertical stack like Clash Royale)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0),
                   child: Column(
                     children: [
-                      // Player 1 Card (User)
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 15,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                // Avatar
-                                Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    color: activeAvatar['bgColor'],
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-                                  ),
-                                  child: ClipOval(
-                                    child: Transform.scale(
-                                      scale: 1.2,
-                                      child: SvgPicture.asset(
-                                        activeAvatar['svgPath'],
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 20),
-                                // Name & Trophies
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _displayName,
-                                      style: GoogleFonts.nunito(
-                                        color: const Color(0xFF1E2A38),
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF3E8FA),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Text("🏆", style: TextStyle(fontSize: 14)),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            "$_trophies",
-                                            style: GoogleFonts.nunito(
-                                              color: const Color(0xFF9B51E0),
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          // "You" badge
-                          Positioned(
-                            top: -10,
-                            right: 20,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      // User Card (Slide Transition)
+                      SlideTransition(
+                        position: _userCardSlide,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF9B51E0),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
                                 boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black12,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
+                                  BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 4)),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      color: activeAvatar['bgColor'],
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                                    ),
+                                    child: ClipOval(
+                                      child: Transform.scale(
+                                        scale: 1.2,
+                                        child: SvgPicture.asset(
+                                          activeAvatar['svgPath'],
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _displayName,
+                                        style: GoogleFonts.nunito(
+                                          color: const Color(0xFF1E2A38),
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3E8FA),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Text("🏆", style: TextStyle(fontSize: 12)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              "$_trophies",
+                                              style: GoogleFonts.nunito(
+                                                color: const Color(0xFF9B51E0),
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                              child: Text(
-                                "You",
-                                style: GoogleFonts.nunito(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 11,
+                            ),
+                            Positioned(
+                              top: -8,
+                              right: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9B51E0),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  "You",
+                                  style: GoogleFonts.nunito(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
-                      // VS Divider
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 18.0),
+                        padding: const EdgeInsets.symmetric(vertical: 14.0),
                         child: Text(
                           "VS",
                           style: GoogleFonts.nunito(
                             color: Colors.white,
-                            fontSize: 32,
+                            fontSize: 28,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
 
-                      // Player 2 Card (Opponent - Erica)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 15,
-                              offset: Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            // Avatar
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: opponentAvatar['bgColor'],
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-                              ),
-                              child: ClipOval(
-                                child: Transform.scale(
-                                  scale: 1.2,
-                                  child: SvgPicture.asset(
-                                    opponentAvatar['svgPath'],
-                                    fit: BoxFit.cover,
+                      // Opponent Card (Slide Transition)
+                      SlideTransition(
+                        position: _opponentCardSlide,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: opponentAvatar['bgColor'],
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                                ),
+                                child: ClipOval(
+                                  child: Transform.scale(
+                                    scale: 1.2,
+                                    child: SvgPicture.asset(
+                                      opponentAvatar['svgPath'],
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 20),
-                            // Name & Trophies
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _opponentName,
-                                  style: GoogleFonts.nunito(
-                                    color: const Color(0xFF1E2A38),
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
+                              const SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _opponentName,
+                                    style: GoogleFonts.nunito(
+                                      color: const Color(0xFF1E2A38),
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3E8FA),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Text("🏆", style: TextStyle(fontSize: 14)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "$_opponentTrophies",
-                                        style: GoogleFonts.nunito(
-                                          color: const Color(0xFF9B51E0),
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 13,
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3E8FA),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Text("🏆", style: TextStyle(fontSize: 12)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "$_opponentTrophies",
+                                          style: GoogleFonts.nunito(
+                                            color: const Color(0xFF9B51E0),
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 12,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -998,30 +1355,40 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 const Spacer(flex: 2),
 
                 // Countdown info
-                Text(
-                  "Match starts in $_countdownSeconds seconds",
-                  style: GoogleFonts.nunito(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                ScaleTransition(
+                  scale: Tween<double>(begin: 0.95, end: 1.05).animate(_pulseController),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE55353),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "Match starts in $_countdownSeconds seconds",
+                      style: GoogleFonts.nunito(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // Cancel match Button
+                // Cancel match
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40.0),
                   child: Duo3dButton(
                     faceColor: const Color(0xFFFFB020),
                     shadowColor: const Color(0xFFD88900),
-                    height: 52,
-                    borderRadius: 26,
+                    height: 50,
+                    borderRadius: 25,
                     onPressed: _cancelMatchFound,
                     child: Text(
                       "Cancel match",
                       style: GoogleFonts.nunito(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1036,7 +1403,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 4. Gameplay View
+  // 4. GAMEPLAY VIEW
   Widget _buildGameplayView() {
     final question = _questions[_currentQuestionIndex];
     final progress = (_currentQuestionIndex) / _questions.length;
@@ -1056,7 +1423,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         backgroundColor: const Color(0xFF4AC4FF),
         body: Stack(
           children: [
-            // Soft Background Pattern
             Positioned.fill(
               child: Opacity(
                 opacity: 0.15,
@@ -1069,15 +1435,15 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
             SafeArea(
               child: Column(
                 children: [
-                  // --- DUEL HEADER ---
+                  // --- HEADER WITH AVATARS, SCORES & EMOTES ---
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
                     child: Column(
                       children: [
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 26),
+                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 24),
                               onPressed: () async {
                                 final shouldPop = await _confirmForfeit();
                                 if (shouldPop && mounted) {
@@ -1087,181 +1453,226 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             ),
                             const Expanded(child: SizedBox()),
                             Text(
-                              "Phyton Quizz",
+                              "$_selectedLanguage Duel",
                               style: GoogleFonts.nunito(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 20,
+                                fontSize: 18,
                               ),
                             ),
                             const Expanded(child: SizedBox()),
-                            const SizedBox(width: 48), // Spacer balance
+                            const SizedBox(width: 48),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        // Side-by-Side Avatars and Scores
+                        const SizedBox(height: 8),
+
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // User (Alex)
-                            Column(
+                            // User (Alex) Avatar + Floating Emote Bubble
+                            Stack(
+                              clipBehavior: Clip.none,
+                              alignment: Alignment.center,
                               children: [
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  alignment: Alignment.center,
+                                Column(
                                   children: [
-                                    Container(
-                                      width: 68,
-                                      height: 68,
-                                      decoration: BoxDecoration(
-                                        color: activeAvatar['bgColor'],
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 3),
-                                      ),
-                                      child: ClipOval(
-                                        child: Transform.scale(
-                                          scale: 1.2,
-                                          child: SvgPicture.asset(
-                                            activeAvatar['svgPath'],
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Score badge (Gold/Orange)
-                                    Positioned(
-                                      top: -8,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFB020),
-                                          borderRadius: BorderRadius.circular(10),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black12,
-                                              blurRadius: 4,
-                                              offset: Offset(0, 2),
+                                    // Shake/Scale animation on User score update
+                                    TweenAnimationBuilder<double>(
+                                      duration: const Duration(milliseconds: 300),
+                                      tween: Tween<double>(begin: 1.0, end: _userScore != _userScorePrevious ? 1.25 : 1.0),
+                                      builder: (context, val, child) {
+                                        return Transform.scale(
+                                          scale: val,
+                                          child: Container(
+                                            width: 60,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                              color: activeAvatar['bgColor'],
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: Colors.white, width: 2.5),
                                             ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          "$_userScore",
-                                          style: GoogleFonts.nunito(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 12,
+                                            child: ClipOval(
+                                              child: Transform.scale(
+                                                scale: 1.2,
+                                                child: SvgPicture.asset(
+                                                  activeAvatar['svgPath'],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _displayName,
+                                      style: GoogleFonts.nunito(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _displayName,
-                                  style: GoogleFonts.nunito(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
+                                // Score Badge
+                                Positioned(
+                                  top: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFB020),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      "$_userScore",
+                                      style: GoogleFonts.nunito(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 10,
+                                      ),
+                                    ),
                                   ),
                                 ),
+                                // Floating Emote bubble above User Avatar
+                                if (_userEmotePath != null)
+                                  Positioned(
+                                    top: -45,
+                                    left: -20,
+                                    child: _buildEmoteBubble(_userEmotePath!),
+                                  ),
                               ],
                             ),
-                            const SizedBox(width: 24),
-                            Text(
-                              "VS",
-                              style: GoogleFonts.nunito(
-                                color: Colors.white.withValues(alpha: 0.8),
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
+                            const SizedBox(width: 16),
+
+                            // Circular Active Countdown Round Timer
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withValues(alpha: 0.2),
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: _roundSecondsLeft / 90.0,
+                                    strokeWidth: 3,
+                                    backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      _roundSecondsLeft > 20 ? Colors.white : Colors.redAccent,
+                                    ),
+                                  ),
+                                  Text(
+                                    "$_roundSecondsLeft",
+                                    style: GoogleFonts.firaCode(
+                                      color: _roundSecondsLeft > 20 ? Colors.white : Colors.redAccent,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 24),
-                            // Opponent (Erica)
-                            Column(
+                            const SizedBox(width: 16),
+
+                            // Opponent (Erica) Avatar + Floating Emote Bubble
+                            Stack(
+                              clipBehavior: Clip.none,
+                              alignment: Alignment.center,
                               children: [
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  alignment: Alignment.center,
+                                Column(
                                   children: [
-                                    Container(
-                                      width: 68,
-                                      height: 68,
-                                      decoration: BoxDecoration(
-                                        color: opponentAvatar['bgColor'],
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 3),
-                                      ),
-                                      child: ClipOval(
-                                        child: Transform.scale(
-                                          scale: 1.2,
-                                          child: SvgPicture.asset(
-                                            opponentAvatar['svgPath'],
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Score badge (Green)
-                                    Positioned(
-                                      top: -8,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF2ECC71),
-                                          borderRadius: BorderRadius.circular(10),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black12,
-                                              blurRadius: 4,
-                                              offset: Offset(0, 2),
+                                    // Shake/Scale animation on Opponent score update
+                                    TweenAnimationBuilder<double>(
+                                      duration: const Duration(milliseconds: 300),
+                                      tween: Tween<double>(begin: 1.0, end: _opponentScore != _opponentScorePrevious ? 1.25 : 1.0),
+                                      builder: (context, val, child) {
+                                        return Transform.scale(
+                                          scale: val,
+                                          child: Container(
+                                            width: 60,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                              color: opponentAvatar['bgColor'],
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: Colors.white, width: 2.5),
                                             ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          "$_opponentScore",
-                                          style: GoogleFonts.nunito(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 12,
+                                            child: ClipOval(
+                                              child: Transform.scale(
+                                                scale: 1.2,
+                                                child: SvgPicture.asset(
+                                                  opponentAvatar['svgPath'],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _opponentName,
+                                      style: GoogleFonts.nunito(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _opponentName,
-                                  style: GoogleFonts.nunito(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
+                                // Score Badge
+                                Positioned(
+                                  top: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2ECC71),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      "$_opponentScore",
+                                      style: GoogleFonts.nunito(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 10,
+                                      ),
+                                    ),
                                   ),
                                 ),
+                                // Floating Emote bubble above Erica's Avatar
+                                if (_opponentEmotePath != null)
+                                  Positioned(
+                                    top: -45,
+                                    right: -20,
+                                    child: _buildEmoteBubble(_opponentEmotePath!, isLeftTail: false),
+                                  ),
                               ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        // Sleek Progress Bar
+                        const SizedBox(height: 12),
+
+                        // Progress Bar
                         Container(
-                          height: 10,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 24),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(5),
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               return Align(
                                 alignment: Alignment.centerLeft,
                                 child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
+                                  duration: const Duration(milliseconds: 250),
                                   width: constraints.maxWidth * progress,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFFFB020),
-                                    borderRadius: BorderRadius.circular(5),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
                               );
@@ -1271,17 +1682,17 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
-                  // --- WORKSPACE & CHOICES (WHITE PANEL) ---
+                  // --- WORKSPACE PANEL ---
                   Expanded(
                     child: Container(
                       width: double.infinity,
                       decoration: const BoxDecoration(
                         color: Color(0xFFF0F2F6),
                         borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(32),
-                          topRight: Radius.circular(32),
+                          topLeft: Radius.circular(28),
+                          topRight: Radius.circular(28),
                         ),
                       ),
                       child: Stack(
@@ -1299,21 +1710,21 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             children: [
                               Expanded(
                                 child: SingleChildScrollView(
-                                  padding: const EdgeInsets.all(20.0),
+                                  padding: const EdgeInsets.all(16.0),
                                   child: Column(
                                     children: [
-                                      // Question Card
+                                      // Code Question Card
                                       Container(
                                         width: double.infinity,
-                                        padding: const EdgeInsets.all(20.0),
+                                        padding: const EdgeInsets.all(16.0),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(24),
+                                          borderRadius: BorderRadius.circular(20),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.04),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
+                                              color: Colors.black.withValues(alpha: 0.03),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
                                             ),
                                           ],
                                         ),
@@ -1323,38 +1734,37 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                             Text(
                                               question.instruction,
                                               style: GoogleFonts.nunito(
-                                                fontSize: 17,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.w900,
                                                 color: const Color(0xFF2C3E50),
-                                                height: 1.3,
+                                                height: 1.25,
                                               ),
                                             ),
-                                            const SizedBox(height: 20),
+                                            const SizedBox(height: 16),
 
-                                            // Code Workspace
+                                            // Indented Code Panel
                                             Container(
                                               width: double.infinity,
-                                              padding: const EdgeInsets.all(16.0),
+                                              padding: const EdgeInsets.all(14.0),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFEFEFEF),
-                                                borderRadius: BorderRadius.circular(16),
+                                                color: const Color(0xFFF5F7FA),
+                                                borderRadius: BorderRadius.circular(14),
+                                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                                               ),
                                               child: _buildCodeLines(question),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(height: 28),
+                                      const SizedBox(height: 20),
 
-                                      // Choices chips
+                                      // Choices palette
                                       Wrap(
-                                        spacing: 10,
-                                        runSpacing: 12,
+                                        spacing: 8,
+                                        runSpacing: 10,
                                         alignment: WrapAlignment.center,
                                         children: List.generate(question.choices.length, (index) {
                                           final choice = question.choices[index];
-
-                                          // Check if already placed in workspace
                                           bool isAlreadyPlaced = false;
                                           _slotContents.forEach((key, value) {
                                             if (value == index) isAlreadyPlaced = true;
@@ -1381,24 +1791,82 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-                              // Bottom bar for check & continue
+
+                              // Bottom Actions (run/continue)
                               _buildBottomActionBar(),
                             ],
                           ),
-                          // Simulated match finish loading overlay
+
+                          // Floating Emote Button + Picker
+                          Positioned(
+                            bottom: _isAnswerChecked ? 96 : 84,
+                            right: 16,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // Emote Quick Picker
+                                if (_showEmotePicker)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(24),
+                                      boxShadow: const [
+                                        BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 3)),
+                                      ],
+                                      border: Border.all(color: const Color(0xFFCBD5E1), width: 1),
+                                    ),
+                                    child: Row(
+                                      children: _emotes.map((e) {
+                                        return GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _showEmotePicker = false;
+                                            });
+                                            _triggerUserEmote(e['svg']!);
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5.0),
+                                            child: SizedBox(
+                                              width: 32,
+                                              height: 32,
+                                              child: SvgPicture.asset(
+                                                e['svg']!,
+                                                fit: BoxFit.contain,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                // Emote Palette toggler button
+                                FloatingActionButton(
+                                  mini: true,
+                                  backgroundColor: const Color(0xFF9B51E0),
+                                  onPressed: () {
+                                    setState(() {
+                                      _showEmotePicker = !_showEmotePicker;
+                                    });
+                                  },
+                                  child: const Icon(Icons.insert_emoticon_rounded, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Opponent finished loading overlay
                           if (_currentQuestionIndex >= 4 && _isAnswerChecked && _opponentQuestionsAnswered < 5)
                             Container(
-                              color: Colors.black.withValues(alpha: 0.6),
+                              color: Colors.black.withValues(alpha: 0.65),
                               child: Center(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                                  padding: const EdgeInsets.all(24),
                                   margin: const EdgeInsets.symmetric(horizontal: 32),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(24),
-                                    boxShadow: const [
-                                      BoxShadow(color: Colors.black26, blurRadius: 15),
-                                    ],
                                   ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -1408,15 +1876,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                       ),
                                       const SizedBox(height: 20),
                                       Text(
-                                        "Waiting for opponent to finish...",
-                                        textAlign: TextAlign.center,
+                                        "Waiting for opponent...",
                                         style: GoogleFonts.nunito(
                                           color: const Color(0xFF1E2A38),
                                           fontSize: 16,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
-                                      const SizedBox(height: 6),
+                                      const SizedBox(height: 4),
                                       Text(
                                         "Erica is answering question ${_opponentQuestionsAnswered + 1}/5",
                                         style: GoogleFonts.nunito(
@@ -1443,13 +1910,46 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper: CodeLines widget
+  // Floating Emote bubble above avatar builder
+  Widget _buildEmoteBubble(String emoteAsset, {bool isLeftTail = true}) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            SvgPicture.asset(emoteAsset, fit: BoxFit.contain),
+            // Speech tail
+            Positioned(
+              bottom: -10,
+              left: isLeftTail ? 12 : null,
+              right: isLeftTail ? null : 12,
+              child: CustomPaint(
+                size: const Size(12, 10),
+                painter: TrianglePainter(isLeft: isLeftTail),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Code line builder
   Widget _buildCodeLines(CodingQuestion question) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: question.codeLines.map((line) {
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6.0),
+          padding: const EdgeInsets.symmetric(vertical: 5.0),
           child: Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 4,
@@ -1461,7 +1961,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 final String text = segment.text;
                 if (text.startsWith("    ")) {
                   final int spacesCount = text.length - text.trimLeft().length;
-                  final double indentWidth = (spacesCount / 4) * 20.0;
+                  final double indentWidth = (spacesCount / 4) * 16.0;
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1469,7 +1969,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       Text(
                         text.trimLeft(),
                         style: GoogleFonts.firaCode(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: const Color(0xFF334E68),
                         ),
@@ -1480,7 +1980,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 return Text(
                   text,
                   style: GoogleFonts.firaCode(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF334E68),
                   ),
@@ -1493,7 +1993,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper: Slots
+  // Drag and Drop Slot
   Widget _buildSlotTarget(String slotId, String placeholder) {
     final int? placedIndex = _slotContents[slotId];
     final question = _questions[_currentQuestionIndex];
@@ -1502,7 +2002,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       onAcceptWithDetails: (details) {
         if (_isAnswerChecked) return;
         setState(() {
-          // Clear choice from any other slot first to support moving between slots
           _slotContents.forEach((key, val) {
             if (val == details.data) {
               _slotContents[key] = null;
@@ -1534,8 +2033,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                     ),
                     if (isHovered && !_isAnswerChecked)
                       Positioned(
-                        top: -8,
-                        right: -8,
+                        top: -6,
+                        right: -6,
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
@@ -1543,8 +2042,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             });
                           },
                           child: Container(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             decoration: const BoxDecoration(
                               color: Color(0xFFE55353),
                               shape: BoxShape.circle,
@@ -1553,7 +2052,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             child: const Icon(
                               Icons.close,
                               color: Colors.white,
-                              size: 11,
+                              size: 10,
                             ),
                           ),
                         ),
@@ -1566,23 +2065,22 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         } else {
           final bool isHovered = candidateData.isNotEmpty;
           return Container(
-            height: 38,
-            constraints: const BoxConstraints(minWidth: 70),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 34,
+            constraints: const BoxConstraints(minWidth: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: isHovered ? const Color(0xFFE2E8F0) : Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isHovered ? const Color(0xFFFFB020) : const Color(0xFFC0C4CC),
+                color: isHovered ? const Color(0xFFFFB020) : const Color(0xFFCBD5E1),
                 width: 1.5,
-                style: BorderStyle.solid,
               ),
             ),
             alignment: Alignment.center,
             child: Text(
               placeholder,
               style: GoogleFonts.firaCode(
-                fontSize: 13,
+                fontSize: 12,
                 color: Colors.grey.shade400,
                 fontWeight: FontWeight.bold,
               ),
@@ -1593,17 +2091,16 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper: Choice Chip
+  // Choices styling
   Widget _buildChoiceChip(
     String text, {
     bool isPlaced = false,
     bool isSlottedStyle = false,
     bool isDragging = false,
   }) {
-    // Curated themed palette styling
     Color bgColor = Colors.white;
     Color textColor = const Color(0xFF334E68);
-    double elevation = isDragging ? 4.0 : 2.0;
+    double elevation = isDragging ? 3.0 : 1.0;
 
     if (isDragging) {
       bgColor = Colors.white.withValues(alpha: 0.85);
@@ -1617,17 +2114,16 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       textColor = Colors.grey.shade400;
       elevation = 0;
     } else {
-      // Color choices palette dynamically
       if (text.startsWith("print") || text.startsWith("printf")) {
         bgColor = const Color(0xFFD6C8FF);
         textColor = const Color(0xFF6B4EE6);
-      } else if (text.startsWith("\"")) {
+      } else if (text.startsWith("\"") || text.startsWith("'")) {
         bgColor = const Color(0xFFC5E9FF);
         textColor = const Color(0xFF1D83B5);
       } else if (text.startsWith(")") || text.startsWith("(")) {
         bgColor = const Color(0xFFC4F2D6);
         textColor = const Color(0xFF238647);
-      } else if (text.startsWith("end=") || text.startsWith("show")) {
+      } else if (text.startsWith("end=") || text.startsWith("show") || text.contains("=")) {
         bgColor = const Color(0xFFFFE0A3);
         textColor = const Color(0xFFB5701B);
       }
@@ -1635,21 +2131,19 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
     return Material(
       elevation: elevation,
-      shadowColor: Colors.black26,
-      borderRadius: BorderRadius.circular(12),
+      shadowColor: Colors.black12,
+      borderRadius: BorderRadius.circular(10),
       color: bgColor,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: isSlottedStyle
-              ? Border.all(color: const Color(0xFFCBD5E1), width: 1)
-              : null,
+          borderRadius: BorderRadius.circular(10),
+          border: isSlottedStyle ? Border.all(color: const Color(0xFFCBD5E1), width: 1) : null,
         ),
         child: Text(
           text,
           style: GoogleFonts.firaCode(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w700,
             color: textColor,
           ),
@@ -1668,14 +2162,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         child: Duo3dButton(
           faceColor: const Color(0xFFFFB020),
           shadowColor: const Color(0xFFD88900),
-          height: 52,
+          height: 48,
           onPressed: _onCheckAnswer,
           child: Text(
             "RUN CODE",
             style: GoogleFonts.nunito(
               color: Colors.white,
               fontWeight: FontWeight.w900,
-              fontSize: 18,
+              fontSize: 16,
             ),
           ),
         ),
@@ -1690,11 +2184,11 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     return Container(
       width: double.infinity,
       color: barColor,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Text(resultIcon, style: const TextStyle(fontSize: 26)),
-          const SizedBox(width: 12),
+          Text(resultIcon, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1705,15 +2199,15 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                   style: GoogleFonts.nunito(
                     color: textColor,
                     fontWeight: FontWeight.w900,
-                    fontSize: 18,
+                    fontSize: 16,
                   ),
                 ),
                 if (!_isAnswerCorrect)
                   Text(
-                    "Keep studying!",
+                    "Try again in the next slot!",
                     style: GoogleFonts.nunito(
                       color: textColor.withValues(alpha: 0.8),
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1721,18 +2215,18 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
             ),
           ),
           SizedBox(
-            width: 130,
+            width: 120,
             child: Duo3dButton(
               faceColor: _isAnswerCorrect ? const Color(0xFF2ECC71) : const Color(0xFFE55353),
               shadowColor: _isAnswerCorrect ? const Color(0xFF27AE60) : const Color(0xFFC0392B),
-              height: 48,
+              height: 44,
               onPressed: _onContinueGameplay,
               child: Text(
                 "CONTINUE",
                 style: GoogleFonts.nunito(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
-                  fontSize: 15,
+                  fontSize: 14,
                 ),
               ),
             ),
@@ -1742,7 +2236,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 5. Results View
+  // 5. RESULTS VIEW (Animated count-up and Confetti)
   Widget _buildResultsView() {
     final bool isVictory = _userScore > _opponentScore;
     final bool isDefeat = _userScore < _opponentScore;
@@ -1779,9 +2273,25 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         ),
         child: Stack(
           children: [
+            // Confetti Overlay (for Victory only)
+            if (isVictory)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _confettiController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      painter: ConfettiPainter(
+                        particles: _confettiParticles,
+                        animationValue: _confettiController.value,
+                      ),
+                    );
+                  },
+                ),
+              ),
+
             Positioned.fill(
               child: Opacity(
-                opacity: 0.15,
+                opacity: 0.1,
                 child: SvgPicture.asset(
                   'assets/images/codu_background_pattern_mobile_soft.svg',
                   fit: BoxFit.cover,
@@ -1794,17 +2304,16 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 child: Column(
                   children: [
                     const Spacer(),
-                    // Match Over visual
                     Text(
                       iconString,
-                      style: const TextStyle(fontSize: 72),
+                      style: const TextStyle(fontSize: 64),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       headerText,
                       style: GoogleFonts.nunito(
                         color: Colors.white,
-                        fontSize: 36,
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1813,31 +2322,26 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       textAlign: TextAlign.center,
                       style: GoogleFonts.nunito(
                         color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
 
                     // Results Card
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(28.0),
+                      padding: const EdgeInsets.all(24.0),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(32),
+                        borderRadius: BorderRadius.circular(28),
                         boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 20,
-                            offset: Offset(0, 8),
-                          ),
+                          BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
                         ],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Scores details
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
@@ -1847,7 +2351,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                     "Your Score",
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFF9AAEC4),
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1856,15 +2360,15 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                     "$_userScore",
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFF1E2A38),
-                                      fontSize: 28,
+                                      fontSize: 24,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ],
                               ),
                               Container(
-                                width: 2,
-                                height: 40,
+                                width: 1.5,
+                                height: 36,
                                 color: const Color(0xFFE2E8F0),
                               ),
                               Column(
@@ -1873,7 +2377,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                     "Erica's Score",
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFF9AAEC4),
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1882,7 +2386,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                     "$_opponentScore",
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFF1E2A38),
-                                      fontSize: 28,
+                                      fontSize: 24,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -1890,46 +2394,47 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 28),
 
-                          // Trophies Adjustments
+                          // Trophies Adjustments with Count-Up/Down Animation
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text(
-                                "🏆",
-                                style: TextStyle(fontSize: 32),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                _trophyDelta >= 0 ? "+$_trophyDelta" : "$_trophyDelta",
-                                style: GoogleFonts.nunito(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  color: _trophyDelta >= 0
-                                      ? const Color(0xFF2ECC71)
-                                      : const Color(0xFFE55353),
-                                ),
-                              ),
+                              const Text("🏆", style: TextStyle(fontSize: 28)),
                               const SizedBox(width: 8),
+                              TweenAnimationBuilder<double>(
+                                duration: const Duration(seconds: 2),
+                                tween: Tween<double>(begin: _trophies.toDouble(), end: (_trophies + _trophyDelta).toDouble()),
+                                builder: (context, val, child) {
+                                  return Text(
+                                    "${val.toInt()}",
+                                    style: GoogleFonts.nunito(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                      color: const Color(0xFF1E2A38),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 6),
                               Text(
-                                "Trophies",
+                                _trophyDelta >= 0 ? "(+$_trophyDelta)" : "($_trophyDelta)",
                                 style: GoogleFonts.nunito(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF1E2A38),
+                                  color: _trophyDelta >= 0 ? const Color(0xFF2ECC71) : const Color(0xFFE55353),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 28),
 
-                          // Continue Button
                           Duo3dButton(
                             faceColor: const Color(0xFFFFB020),
                             shadowColor: const Color(0xFFD88900),
-                            height: 52,
+                            height: 48,
                             onPressed: () {
+                              _confettiController.stop();
                               _updateState(DuelState.lobby);
                               _loadUserData();
                             },
@@ -1938,7 +2443,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                               style: GoogleFonts.nunito(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 18,
+                                fontSize: 16,
                               ),
                             ),
                           ),
@@ -1956,10 +2461,86 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Format Elapsed seconds to 0:00
+  // Format Elapsed seconds
   String _formatTimer(int seconds) {
     final int mins = seconds ~/ 60;
     final int secs = seconds % 60;
     return "$mins:${secs.toString().padLeft(2, '0')}";
   }
+}
+
+// Confetti Particle model
+class ConfettiParticle {
+  double x;
+  double y;
+  double speed;
+  double size;
+  Color color;
+  double angle;
+
+  ConfettiParticle({
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.color,
+    required this.angle,
+  });
+}
+
+// Confetti painter
+class ConfettiPainter extends CustomPainter {
+  final List<ConfettiParticle> particles;
+  final double animationValue;
+
+  ConfettiPainter({required this.particles, required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    for (var p in particles) {
+      double currentY = p.y + (size.height * animationValue * p.speed) % size.height;
+      double currentX = (p.x + sin(animationValue * 6 + p.angle) * 15) % size.width;
+
+      paint.color = p.color;
+      canvas.save();
+      canvas.translate(currentX, currentY);
+      canvas.rotate(animationValue * p.angle * 2.5);
+      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 0.5), paint);
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant ConfettiPainter oldDelegate) => true;
+}
+
+// Triangle painter for Emote bubble tail pointing downwards
+class TrianglePainter extends CustomPainter {
+  final bool isLeft;
+  TrianglePainter({this.isLeft = true});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    if (isLeft) {
+      path.moveTo(0, 0);
+      path.lineTo(size.width, 0);
+      path.lineTo(0, size.height);
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(size.width, 0);
+      path.lineTo(size.width, size.height);
+    }
+    path.close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant TrianglePainter oldDelegate) => false;
 }
