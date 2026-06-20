@@ -694,6 +694,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final Map<String, dynamic> activeAvatar = _avatars[_avatarIndex];
 
+    // Dynamically calculate badge size and spacing to fit exactly 4 badges per row without overflow
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double availableWidth = screenWidth - 80; // 16*2 margins + 24*2 padding
+    final double badgeSize = ((availableWidth - 24) / 4).clamp(50.0, 95.0);
+    final double spacing = ((availableWidth - (badgeSize * 4)) / 3).clamp(4.0, 16.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
@@ -971,20 +977,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              Wrap(
-                                spacing: 16,
-                                runSpacing: 16,
-                                alignment: WrapAlignment.center,
+                              Column(
                                 children: [
-                                  BadgeShield(emoji: '⭐', fillColor: const Color(0xFFFFD700), borderColor: const Color(0xFFFFA000)),
-                                  BadgeShield(emoji: '🔥', fillColor: const Color(0xFFFF5722), borderColor: const Color(0xFFBF360C)),
-                                  BadgeShield(emoji: '💡', fillColor: const Color(0xFFFFEB3B), borderColor: const Color(0xFFF9A825)),
-                                  BadgeShield(emoji: '🏆', fillColor: const Color(0xFF4CAF50), borderColor: const Color(0xFF1B5E20)),
-                                  BadgeShield(emoji: '🚀', fillColor: const Color(0xFF2196F3), borderColor: const Color(0xFF0D47A1)),
-                                  BadgeShield(emoji: '🎯', fillColor: const Color(0xFFE91E63), borderColor: const Color(0xFF880E4F)),
-                                  BadgeShield(emoji: '💎', fillColor: const Color(0xFF00BCD4), borderColor: const Color(0xFF006064)),
-                                  BadgeShield(emoji: '🦁', fillColor: const Color(0xFFFF9800), borderColor: const Color(0xFFE65100)),
-                                  BadgeShield(emoji: '🧠', fillColor: const Color(0xFF9C27B0), borderColor: const Color(0xFF4A148C)),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1.png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (2).png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (3).png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (4).png', size: badgeSize),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (5).png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (6).png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (7).png', size: badgeSize),
+                                      SizedBox(width: spacing),
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (8).png', size: badgeSize),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      BadgeShield(imagePath: 'assets/images/Badge/Badge1 (9).png', size: badgeSize),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ],
@@ -1025,91 +1051,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 }
 
-// ---------------- CUSTOM SHIELD BADGE WIDGET ----------------
+// ---------------- CUSTOM IMAGE BADGE WIDGET ----------------
 
 class BadgeShield extends StatelessWidget {
-  final String emoji;
-  final Color fillColor;
-  final Color borderColor;
+  final String imagePath;
   final double size;
 
   const BadgeShield({
     super.key,
-    required this.emoji,
-    required this.fillColor,
-    required this.borderColor,
-    this.size = 56,
+    required this.imagePath,
+    this.size = 85,
   });
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(size, size * 1.15), // Shield aspect ratio
-      painter: ShieldPainter(fillColor: fillColor, borderColor: borderColor),
-      child: SizedBox(
-        width: size,
-        height: size * 1.15,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 6.0),
-            child: Text(
-              emoji,
-              style: TextStyle(fontSize: size * 0.46),
-            ),
-          ),
-        ),
-      ),
+    return Image.asset(
+      imagePath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
     );
-  }
-}
-
-class ShieldPainter extends CustomPainter {
-  final Color fillColor;
-  final Color borderColor;
-
-  ShieldPainter({required this.fillColor, required this.borderColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.fill;
-
-    // Draw the shield outline shadow for 3D look
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.08)
-      ..style = PaintingStyle.fill;
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round;
-
-    final double w = size.width;
-    final double h = size.height;
-
-    // Build the shield path
-    final path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(w, 0);
-    path.lineTo(w, h * 0.58);
-    // Smooth quadratic curve to bottom tip
-    path.quadraticBezierTo(w, h * 0.88, w / 2, h);
-    path.quadraticBezierTo(0, h * 0.88, 0, h * 0.58);
-    path.close();
-
-    // Draw shadow offset
-    canvas.drawPath(path.shift(const Offset(0, 4)), shadowPaint);
-    // Draw face
-    canvas.drawPath(path, paint);
-    // Draw border
-    canvas.drawPath(path, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant ShieldPainter oldDelegate) {
-    return oldDelegate.fillColor != fillColor || oldDelegate.borderColor != borderColor;
   }
 }
 
