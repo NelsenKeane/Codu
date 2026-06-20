@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'user_data_service.dart';
 
 class FriendService {
@@ -37,18 +38,116 @@ class FriendService {
     final wins = await UserDataService().getWins();
     final losses = await UserDataService().getLosses();
 
-    await _db.collection('users').doc(uid).set({
-      'uid': uid,
-      'email': email,
-      'displayName': displayName,
-      'username': normalizedUsername,
-      'streak': streak,
-      'trophies': trophies,
-      'avatarIndex': avatarIndex,
-      'wins': wins,
-      'losses': losses,
-      'lastActive': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final List<String> subjects = ['Python', 'C++', 'Javascript', 'Java'];
+    final history = await UserDataService().getHistory();
+    
+    final Map<String, Map<String, int>> allSubjectsLevels = {};
+    final Map<String, int> allSubjectsCompleted = {};
+    final Map<String, dynamic> coursesData = {};
+
+    for (final subject in subjects) {
+      final String docId = subject.toLowerCase();
+      int completedCount = 0;
+      for (var item in history) {
+        if (item['lang'] == subject) {
+          completedCount = item['completed'] ?? 0;
+          break;
+        }
+      }
+      allSubjectsCompleted[docId] = completedCount;
+      
+      final starsMap = await UserDataService().getLevelStars(subject);
+      final Map<String, int> levelsData = {};
+      starsMap.forEach((key, val) {
+        levelsData[key.toString()] = val;
+      });
+      allSubjectsLevels[docId] = levelsData;
+
+      coursesData[docId] = {
+        'subject': subject,
+        'completed': completedCount,
+        'levels': levelsData,
+      };
+    }
+
+    // 1. Direct Write for User Profile and Inline Courses Map (guaranteed to succeed under /users/{uid})
+    try {
+      await _db.collection('users').doc(uid).set({
+        'uid': uid,
+        'email': email,
+        'displayName': displayName,
+        'username': normalizedUsername,
+        'streak': streak,
+        'trophies': trophies,
+        'avatarIndex': avatarIndex,
+        'wins': wins,
+        'losses': losses,
+        'courses': coursesData, // Fail-safe inline map field sync
+        'lastActive': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint("Profile and inline courses progress synced successfully!");
+    } catch (e) {
+      debugPrint("Failed to sync profile progress: $e");
+    }
+
+    // 2. Batch 1: User Subcollection progress (Path A: /users/{uid}/courses/{courseName})
+    final batch1 = _db.batch();
+    for (final subject in subjects) {
+      final String docId = subject.toLowerCase();
+      final completedCount = allSubjectsCompleted[docId] ?? 0;
+      final levelsData = allSubjectsLevels[docId] ?? {};
+
+      batch1.set(_db.collection('users').doc(uid).collection('courses').doc(docId), {
+        'subject': subject,
+        'completed': completedCount,
+        'levels': levelsData,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    try {
+      await batch1.commit();
+      debugPrint("Nested courses progress subcollection synced successfully!");
+    } catch (e) {
+      debugPrint("Failed to sync nested courses progress subcollection: $e");
+    }
+
+    // 3. Batch 2: Root-level courses collection (might fail if rules deny writes to /courses)
+    final batch2 = _db.batch();
+    for (final subject in subjects) {
+      final String docId = subject.toLowerCase();
+      final completedCount = allSubjectsCompleted[docId] ?? 0;
+      final levelsData = allSubjectsLevels[docId] ?? {};
+
+      // Path B: /courses/{courseName}/users/{uid}
+      batch2.set(_db.collection('courses').doc(docId).collection('users').doc(uid), {
+        'uid': uid,
+        'email': email,
+        'displayName': displayName,
+        'subject': subject,
+        'completed': completedCount,
+        'levels': levelsData,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Path C: /courses/{uid}_{courseName}
+      batch2.set(_db.collection('courses').doc('${uid}_$docId'), {
+        'uid': uid,
+        'email': email,
+        'displayName': displayName,
+        'subject': subject,
+        'completed': completedCount,
+        'levels': levelsData,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    try {
+      await batch2.commit();
+      debugPrint("Root-level courses collection synced successfully!");
+    } catch (e) {
+      debugPrint("Failed to sync root-level courses progress (likely due to Firestore Security Rules): $e");
+    }
   }
 
   /// Searches for a user by their username (normalized, without the '@' symbol).

@@ -532,8 +532,8 @@ class UserDataService {
     int currentStreak = await getStreak();
     await saveStreak(currentStreak + 1);
 
-    // Sync to Firestore
-    await FriendService().syncUserToFirestore().catchError((e) {
+    // Sync to Firestore in the background (non-blocking)
+    FriendService().syncUserToFirestore().catchError((e) {
       debugPrint("Failed to sync progress to Firestore: $e");
     });
   }

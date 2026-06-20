@@ -309,7 +309,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           _buildBackgroundDecor(statusBarHeight),
