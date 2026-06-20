@@ -41,6 +41,7 @@ dependencies:
   flutter_svg: ^2.3.0
   cloud_firestore: ^4.17.5
   path_drawing: ^1.0.1
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +70,7 @@ flutter:
     - assets/images/Characters/
     - assets/images/CoduExpression/
     - assets/images/Badge/
+    - assets/Audio/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

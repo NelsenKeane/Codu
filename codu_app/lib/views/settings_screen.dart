@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 import 'login_screen.dart';
 import 'help_center_screen.dart';
 
@@ -205,7 +206,7 @@ class SettingsView extends StatelessWidget {
                         title: "Sound volume",
                         iconColor: const Color(0xFFFFB020),
                         iconBgColor: const Color(0xFFFFF7E6),
-                        onTap: () {},
+                        onTap: () => _showVolumeSettingsDialog(context),
                       ),
                     ],
                   ),
@@ -273,6 +274,173 @@ class SettingsView extends StatelessWidget {
   // Floating background silhouettes for premium look
   Widget _buildBackgroundDecor(double statusBarHeight) {
     return const SizedBox.shrink();
+  }
+
+  Widget _buildSliderRow({
+    required IconData icon,
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: GoogleFonts.nunito(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                "${(value * 100).round()}%",
+                style: GoogleFonts.nunito(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AppColors.textGrey,
+                ),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: color,
+              inactiveTrackColor: color.withValues(alpha: 0.15),
+              thumbColor: color,
+              overlayColor: color.withValues(alpha: 0.2),
+              trackHeight: 6,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            ),
+            child: Slider(
+              value: value,
+              min: 0.0,
+              max: 1.0,
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showVolumeSettingsDialog(BuildContext context) {
+    final audio = AudioService();
+    double tempMaster = audio.masterVolume;
+    double tempMusic = audio.musicVolume;
+    double tempSfx = audio.sfxVolume;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Volume Settings",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.88,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "Audio Settings",
+                        style: GoogleFonts.nunito(
+                          color: AppColors.textDark,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildSliderRow(
+                        icon: Icons.volume_up_rounded,
+                        label: "Master Volume",
+                        value: tempMaster,
+                        color: const Color(0xFF46B830),
+                        onChanged: (val) {
+                          setState(() {
+                            tempMaster = val;
+                          });
+                          audio.setMasterVolume(val);
+                        },
+                      ),
+                      _buildSliderRow(
+                        icon: Icons.music_note_rounded,
+                        label: "Music Volume",
+                        value: tempMusic,
+                        color: const Color(0xFFFFB020),
+                        onChanged: (val) {
+                          setState(() {
+                            tempMusic = val;
+                          });
+                          audio.setMusicVolume(val);
+                        },
+                      ),
+                      _buildSliderRow(
+                        icon: Icons.graphic_eq_rounded,
+                        label: "SFX Volume",
+                        value: tempSfx,
+                        color: const Color(0xFF56CCF2),
+                        onChanged: (val) {
+                          setState(() {
+                            tempSfx = val;
+                          });
+                          audio.setSfxVolume(val);
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Duo3dRectButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        faceColor: const Color(0xFFFFB020),
+                        shadowColor: const Color(0xFFD88900),
+                        width: double.infinity,
+                        borderRadius: 16,
+                        child: Text(
+                          "Done",
+                          style: GoogleFonts.nunito(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 

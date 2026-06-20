@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/game_models.dart';
 import '../services/user_data_service.dart';
+import '../services/audio_service.dart';
 import '../widgets/duo_3d_button.dart';
 
 class GameplayScreen extends StatefulWidget {
@@ -39,7 +40,17 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     _questions = QuestionBank.getQuestionsForLevel(widget.levelNumber, widget.subject);
     _clearSlots();
     _startTime = DateTime.now();
+    AudioService().playMusic('Audio/Game Music.mp3');
   }
+
+  @override
+  void dispose() {
+    AudioService().stopMusic();
+    AudioService().playMusic('Audio/Menu Music.mp3');
+    super.dispose();
+  }
+
+
 
   void _clearSlots() {
     _slotContents.clear();
@@ -136,6 +147,12 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
         _mistakesCount++;
       }
     });
+
+    if (correct) {
+      AudioService().playSfx('Audio/Correct.mp3');
+    } else {
+      AudioService().playSfx('Audio/Wrong.mp3');
+    }
   }
 
   void _onContinue() {
@@ -155,6 +172,8 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
   }
 
   Future<void> _completeLevel() async {
+    AudioService().stopMusic();
+    AudioService().playSfx('Audio/Completed.mp3');
     // Show victory loader
     showDialog(
       context: context,
@@ -390,6 +409,8 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
   }
 
   void _showGameOverDialog() {
+    AudioService().stopMusic();
+    AudioService().playSfx('Audio/CompletedLose.mp3');
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -453,6 +474,7 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
                 _currentQuestionIndex = 0;
                 _clearSlots();
               });
+              AudioService().playMusic('Audio/Game Music.mp3');
             },
             child: Text(
               "Try Again",
