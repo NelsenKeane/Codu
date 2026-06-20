@@ -9,7 +9,8 @@ import '../services/user_data_service.dart';
 import 'gameplay_screen.dart';
 
 class LevelsScreen extends StatefulWidget {
-  const LevelsScreen({super.key});
+  final String? initialSubject;
+  const LevelsScreen({super.key, this.initialSubject});
 
   @override
   State<LevelsScreen> createState() => _LevelsScreenState();
@@ -40,7 +41,29 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    if (widget.initialSubject != null) {
+      String subject = widget.initialSubject!;
+      if (subject == 'Python') {
+        subject = 'Phyton';
+      }
+      _selectedSubject = subject;
+    }
     _loadUserData();
+  }
+
+  @override
+  void didUpdateWidget(covariant LevelsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSubject != null && widget.initialSubject != oldWidget.initialSubject) {
+      String subject = widget.initialSubject!;
+      if (subject == 'Python') {
+        subject = 'Phyton';
+      }
+      setState(() {
+        _selectedSubject = subject;
+      });
+      _loadSvgPath();
+    }
   }
 
   @override

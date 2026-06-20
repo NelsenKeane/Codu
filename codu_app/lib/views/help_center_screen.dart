@@ -260,6 +260,13 @@ class _HelpCenterViewState extends State<HelpCenterView> {
       backgroundColor: const Color(0xFF56CCF2), // Sky Blue background
       body: Stack(
         children: [
+          // Background SVG pattern
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
           // 1. Fixed Header Mascot (Rendered first at the bottom layer)
           Positioned(
             top: statusBarHeight + 45,
