@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'help_center_screen.dart';
 
 class SettingsView extends StatelessWidget {
   final VoidCallback onBack;
@@ -218,7 +219,15 @@ class SettingsView extends StatelessWidget {
                         title: "Help center",
                         iconColor: const Color(0xFF8F93EA),
                         iconBgColor: const Color(0xFFF3E8FA),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => HelpCenterView(
+                                onBack: () => Navigator.of(context).pop(),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

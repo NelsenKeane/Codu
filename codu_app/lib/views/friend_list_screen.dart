@@ -551,158 +551,187 @@ class _FriendListViewState extends State<FriendListView> {
         ? _avatars[avatarIndex]
         : _avatars[0];
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Circular Avatar
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: avatar['bgColor'],
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: ClipOval(
-              child: Transform.scale(
-                scale: 1.2,
-                child: SvgPicture.asset(
-                  avatar['svgPath'],
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                // Circular Avatar
+                Container(
                   width: 58,
                   height: 58,
-                  fit: BoxFit.cover,
+                  decoration: BoxDecoration(
+                    color: avatar['bgColor'],
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: ClipOval(
+                    child: Transform.scale(
+                      scale: 1.2,
+                      child: SvgPicture.asset(
+                        avatar['svgPath'],
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
+                const SizedBox(width: 14),
 
-          // Details column
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  friend['displayName'] ?? "Codu User",
-                  style: GoogleFonts.nunito(
-                    color: AppColors.textDark,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  "@${friend['username'] ?? 'username'}",
-                  style: GoogleFonts.nunito(
-                    color: AppColors.textGrey,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Stats Row
-                Row(
-                  children: [
-                    // Streak Capsule
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F8E9),
-                        borderRadius: BorderRadius.circular(8),
+                // Details column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        friend['displayName'] ?? "Codu User",
+                        style: GoogleFonts.nunito(
+                          color: AppColors.textDark,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
                       ),
-                      child: Row(
+                      Text(
+                        "@${friend['username'] ?? 'username'}",
+                        style: GoogleFonts.nunito(
+                          color: AppColors.textGrey,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Stats Row
+                      Row(
                         children: [
-                          const Text("🔥", style: TextStyle(fontSize: 11)),
-                          const SizedBox(width: 4),
-                          Text(
-                            (friend['streak'] ?? 0).toString(),
-                            style: GoogleFonts.nunito(
-                              color: AppColors.textDark,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 10,
+                          // Streak Capsule
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F8E9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text("🔥", style: TextStyle(fontSize: 11)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  (friend['streak'] ?? 0).toString(),
+                                  style: GoogleFonts.nunito(
+                                    color: AppColors.textDark,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Trophy Capsule
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E8FA),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text("🏆", style: TextStyle(fontSize: 11)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  (friend['trophies'] ?? 0).toString(),
+                                  style: GoogleFonts.nunito(
+                                    color: AppColors.textDark,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Trophy Capsule
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3E8FA),
-                        borderRadius: BorderRadius.circular(8),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // 3D Challenge button
+                Duo3dMiniButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "Challenged ${friend['displayName'] ?? 'friend'} to a coding duel!",
+                          style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+                        ),
+                        behavior: SnackBarBehavior.floating,
                       ),
-                      child: Row(
-                        children: [
-                          const Text("🏆", style: TextStyle(fontSize: 11)),
-                          const SizedBox(width: 4),
-                          Text(
-                            (friend['trophies'] ?? 0).toString(),
-                            style: GoogleFonts.nunito(
-                              color: AppColors.textDark,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
+                    );
+                  },
+                  faceColor: const Color(0xFF8F93EA), // Purple face color
+                  shadowColor: const Color(0xFF7076E3), // Darker shadow
+                  width: 80,
+                  height: 38,
+                  borderRadius: 19,
+                  child: Text(
+                    "Duel",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
+        ),
 
-          // Remove Friend icon button
-          IconButton(
-            icon: const Icon(Icons.person_remove_rounded, color: Colors.grey, size: 22),
-            tooltip: "Remove friend",
-            onPressed: () => _showRemoveFriendConfirmation(friend),
-          ),
-          const SizedBox(width: 4),
-
-          // 3D Challenge button
-          Duo3dMiniButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Challenged ${friend['displayName'] ?? 'friend'} to a coding duel!",
-                    style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+        // Remove Friend red trashcan button overlapping top right corner
+        Positioned(
+          top: -2,
+          right: -4,
+          child: GestureDetector(
+            onTap: () => _showRemoveFriendConfirmation(friend),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF7A0810), // Solid dark red circle
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            faceColor: const Color(0xFF8F93EA), // Purple face color
-            shadowColor: const Color(0xFF7076E3), // Darker shadow
-            width: 80,
-            height: 38,
-            borderRadius: 19,
-            child: Text(
-              "Duel",
-              style: GoogleFonts.nunito(
+                ],
+              ),
+              child: const Icon(
+                Icons.delete_outline_rounded,
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
+                size: 18,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
