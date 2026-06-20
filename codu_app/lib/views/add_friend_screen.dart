@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
+import '../services/friend_service.dart';
 
 class AddFriendView extends StatefulWidget {
   final VoidCallback onBack;
@@ -16,41 +19,29 @@ class _AddFriendViewState extends State<AddFriendView> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
-  // Recommended friends mock data
-  final List<Map<String, dynamic>> _recommendedFriends = [
-    {
-      'id': 'rf-1',
-      'name': 'Emma Reyes',
-      'username': '@emma_codes',
-      'emoji': '👧',
-      'bgColor': const Color(0xFF8F93EA),
-      'isAdded': false,
-    },
-    {
-      'id': 'rf-2',
-      'name': 'Kevin Lim',
-      'username': '@kevdev',
-      'emoji': '🤓',
-      'bgColor': const Color(0xFFFFD56B),
-      'isAdded': false,
-    },
-    {
-      'id': 'rf-3',
-      'name': 'Brandon Cruz',
-      'username': '@brandon_c',
-      'emoji': '👦',
-      'bgColor': const Color(0xFFFF8B8B),
-      'isAdded': false,
-    },
-    {
-      'id': 'rf-4',
-      'name': 'Bentley Wu',
-      'username': '@bentley_w',
-      'emoji': '🧒',
-      'bgColor': const Color(0xFF8CEEAD),
-      'isAdded': false,
-    },
+  List<Map<String, dynamic>> _recommendations = [];
+  bool _loadingRecommendations = true;
+
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isSearching = false;
+
+  // Track statuses locally to give immediate feedback when tapping "Add"
+  final Map<String, String> _statuses = {};
+
+  final List<Map<String, dynamic>> _avatars = [
+    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd Boy'},
+    {'emoji': '👧', 'bgColor': const Color(0xFF8F93EA), 'name': 'Long Hair Girl'},
+    {'emoji': '👦', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Brandon'},
+    {'emoji': '👩‍💼', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Emma'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Curly Boy'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Bentley'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecommendations();
+  }
 
   @override
   void dispose() {
@@ -58,16 +49,129 @@ class _AddFriendViewState extends State<AddFriendView> {
     super.dispose();
   }
 
+  Future<void> _loadRecommendations() async {
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid == null) return;
+
+      final snap = await FirebaseFirestore.instance.collection('users').limit(20).get();
+      
+      final List<Map<String, dynamic>> loadedList = [];
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        if (data['uid'] == currentUid) continue;
+
+        // Fetch relationship status
+        final status = await FriendService().getFriendshipStatus(data['uid']);
+        // Recommend users who are not yet friends and don't have pending request
+        if (status == 'none') {
+          loadedList.add(data);
+          _statuses[data['uid']] = status;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _recommendations = loadedList.take(6).toList(); // Show up to 6 recommended users
+          _loadingRecommendations = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading recommendations: $e");
+      if (mounted) {
+        setState(() {
+          _loadingRecommendations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _performSearch(String query) async {
+    final cleanQuery = query.trim().replaceAll('@', '').toLowerCase();
+    if (cleanQuery.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      final results = await FriendService().searchUsers(cleanQuery);
+      for (var user in results) {
+        final uid = user['uid'];
+        if (uid != null && !_statuses.containsKey(uid)) {
+          final status = await FriendService().getFriendshipStatus(uid);
+          _statuses[uid] = status;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Search error: $e");
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _sendRequest(String targetUid) async {
+    try {
+      await FriendService().sendFriendRequest(targetUid);
+      setState(() {
+        _statuses[targetUid] = 'outgoing';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Friend request sent!",
+              style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error sending request: $e");
+    }
+  }
+
+  Future<void> _acceptRequest(String targetUid) async {
+    try {
+      await FriendService().acceptFriendRequest(targetUid);
+      setState(() {
+        _statuses[targetUid] = 'friend';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Accepted friend request!",
+              style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error accepting request: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-
-    // Filter recommended friends list based on search query
-    final filteredFriends = _recommendedFriends.where((friend) {
-      final nameMatches = friend['name'].toLowerCase().contains(_searchQuery.toLowerCase());
-      final usernameMatches = friend['username'].toLowerCase().contains(_searchQuery.toLowerCase());
-      return nameMatches || usernameMatches;
-    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF56CCF2),
@@ -123,7 +227,7 @@ class _AddFriendViewState extends State<AddFriendView> {
             child: Container(
               width: double.infinity,
               decoration: const BoxDecoration(
-                color: Color(0xFFF7F8FA), // Off-white card container from mockup
+                color: Color(0xFFF7F8FA),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(36),
                   topRight: Radius.circular(36),
@@ -141,37 +245,83 @@ class _AddFriendViewState extends State<AddFriendView> {
                     _buildSearchBar(),
                     const SizedBox(height: 28),
 
-                    // "Recommended" Title
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: Text(
-                        "Recommended",
-                        style: GoogleFonts.nunito(
-                          color: AppColors.textDark,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Recommended Grid (2x2 layout)
-                    if (filteredFriends.isEmpty)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Text(
-                            "No users found matching your search.",
-                            style: GoogleFonts.nunito(
-                              color: AppColors.textGrey,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                    // Search Results or Recommendations
+                    if (_searchQuery.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Text(
+                          "Search Results",
+                          style: GoogleFonts.nunito(
+                            color: AppColors.textDark,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
                           ),
                         ),
-                      )
-                    else
-                      _buildRecommendedGrid(filteredFriends),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_isSearching)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: CircularProgressIndicator(color: Color(0xFF56CCF2)),
+                          ),
+                        )
+                      else if (_searchResults.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Text(
+                              "No users found matching \"$_searchQuery\"",
+                              style: GoogleFonts.nunito(
+                                color: AppColors.textGrey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        )
+                      else
+                        _buildRecommendedGrid(_searchResults),
+                    ] else ...[
+                      // "Recommended" Title
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Text(
+                          "Recommended",
+                          style: GoogleFonts.nunito(
+                            color: AppColors.textDark,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (_loadingRecommendations)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: CircularProgressIndicator(color: Color(0xFF56CCF2)),
+                          ),
+                        )
+                      else if (_recommendations.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Text(
+                              "No recommendations right now.",
+                              style: GoogleFonts.nunito(
+                                color: AppColors.textGrey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        _buildRecommendedGrid(_recommendations),
+                    ],
                   ],
                 ),
               ),
@@ -180,11 +330,6 @@ class _AddFriendViewState extends State<AddFriendView> {
         ],
       ),
     );
-  }
-
-  // Floating background silhouettes for premium look
-  Widget _buildBackgroundDecor(double statusBarHeight) {
-    return const SizedBox.shrink();
   }
 
   // Rounded search bar input
@@ -218,6 +363,7 @@ class _AddFriendViewState extends State<AddFriendView> {
                 setState(() {
                   _searchQuery = val;
                 });
+                _performSearch(val);
               },
               style: GoogleFonts.nunito(
                 color: AppColors.textDark,
@@ -269,7 +415,12 @@ class _AddFriendViewState extends State<AddFriendView> {
 
   // Individual Friend card with custom 3D Add button
   Widget _buildFriendCard(Map<String, dynamic> friend) {
-    final bool isAdded = friend['isAdded'];
+    final uid = friend['uid'] ?? "";
+    final currentStatus = _statuses[uid] ?? 'none';
+    final avatarIndex = friend['avatarIndex'] ?? 0;
+    final Map<String, dynamic> avatar = (avatarIndex >= 0 && avatarIndex < _avatars.length)
+        ? _avatars[avatarIndex]
+        : _avatars[0];
 
     return Container(
       decoration: BoxDecoration(
@@ -292,13 +443,13 @@ class _AddFriendViewState extends State<AddFriendView> {
             width: 76,
             height: 76,
             decoration: BoxDecoration(
-              color: friend['bgColor'],
+              color: avatar['bgColor'],
               shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFFF0F2F6), width: 3),
             ),
             alignment: Alignment.center,
             child: Text(
-              friend['emoji'],
+              avatar['emoji'],
               style: const TextStyle(fontSize: 42),
             ),
           ),
@@ -306,77 +457,122 @@ class _AddFriendViewState extends State<AddFriendView> {
 
           // Display Name
           Text(
-            friend['name'],
+            friend['displayName'] ?? "Codu User",
             textAlign: TextAlign.center,
             style: GoogleFonts.nunito(
               color: AppColors.textDark,
               fontWeight: FontWeight.w900,
               fontSize: 16,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
 
           // Username
           Text(
-            friend['username'],
+            "@${friend['username'] ?? 'username'}",
             textAlign: TextAlign.center,
             style: GoogleFonts.nunito(
               color: AppColors.textGrey,
               fontWeight: FontWeight.bold,
               fontSize: 12,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 16),
 
-          // 3D Add / Requested Button
+          // 3D Add / Requested / Friends Button
           SizedBox(
             width: double.infinity,
             height: 38,
-            child: isAdded
-                ? Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F8E9), // Light green requested state
-                      borderRadius: BorderRadius.circular(19),
-                      border: Border.all(color: const Color(0xFF46B830), width: 1.5),
-                    ),
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_rounded, color: Color(0xFF46B830), size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Requested",
-                          style: GoogleFonts.nunito(
-                            color: const Color(0xFF46B830),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Duo3dAddButton(
-                    onPressed: () {
-                      setState(() {
-                        friend['isAdded'] = true;
-                      });
-                    },
-                    faceColor: const Color(0xFFFFB020),
-                    shadowColor: const Color(0xFFD88900),
-                    child: Text(
-                      "Add",
-                      style: GoogleFonts.nunito(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
+            child: _buildFriendshipActionButton(uid, currentStatus),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildFriendshipActionButton(String targetUid, String status) {
+    if (status == 'outgoing') {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F8E9), // Light green requested state
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(color: const Color(0xFF46B830), width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_rounded, color: Color(0xFF46B830), size: 16),
+            const SizedBox(width: 4),
+            Text(
+              "Requested",
+              style: GoogleFonts.nunito(
+                color: const Color(0xFF46B830),
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (status == 'incoming') {
+      return Duo3dAddButton(
+        onPressed: () => _acceptRequest(targetUid),
+        faceColor: const Color(0xFF46B830), // Green face color to accept
+        shadowColor: const Color(0xFF339320),
+        child: Text(
+          "Accept",
+          style: GoogleFonts.nunito(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+        ),
+      );
+    } else if (status == 'friend') {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFECEFF1),
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(color: const Color(0xFF90A4AE), width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.people_rounded, color: Color(0xFF78909C), size: 16),
+            const SizedBox(width: 4),
+            Text(
+              "Friends",
+              style: GoogleFonts.nunito(
+                color: const Color(0xFF78909C),
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // status == 'none'
+      return Duo3dAddButton(
+        onPressed: () => _sendRequest(targetUid),
+        faceColor: const Color(0xFFFFB020),
+        shadowColor: const Color(0xFFD88900),
+        child: Text(
+          "Add",
+          style: GoogleFonts.nunito(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+        ),
+      );
+    }
   }
 }
 

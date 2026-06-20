@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/user_data_service.dart';
+import '../services/friend_service.dart';
 import 'lessons_screen.dart';
 import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
@@ -36,6 +37,12 @@ class _MainScreenState extends State<MainScreen> {
     final streak = await UserDataService().getStreak();
     final subjects = await UserDataService().getSubjects();
     final history = await UserDataService().getHistory();
+    
+    // Sync profile to Firestore asynchronously
+    FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync user to firestore: $e");
+    });
+
     if (mounted) {
       setState(() {
         _streak = streak;

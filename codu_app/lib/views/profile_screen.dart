@@ -4,9 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
 import '../services/user_data_service.dart';
+import '../services/friend_service.dart';
 import 'settings_screen.dart';
 import 'add_friend_screen.dart';
 import 'friend_list_screen.dart';
+
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -63,6 +65,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _displayName = finalDisplayName;
         _username = finalUsername;
         _isLoading = false;
+      });
+      // Sync to firestore on profile load/change
+      FriendService().syncUserToFirestore().catchError((e) {
+        debugPrint("Failed to sync profile: $e");
       });
     }
   }
@@ -214,6 +220,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 final newName = controller.text.trim();
                                 Navigator.of(ctx).pop();
                                 await UserDataService().saveDisplayName(newName);
+                                // Sync updated username to Firestore
+                                FriendService().syncUserToFirestore().catchError((e) {
+                                  debugPrint("Failed to sync username: $e");
+                                });
                                 if (mounted) {
                                   setState(() {
                                     _displayName = newName;

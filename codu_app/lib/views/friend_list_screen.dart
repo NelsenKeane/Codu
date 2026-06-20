@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/friend_service.dart';
 
 class FriendListView extends StatefulWidget {
   final VoidCallback onBack;
@@ -21,54 +22,13 @@ class _FriendListViewState extends State<FriendListView> {
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
-  // Mock Friends List
-  final List<Map<String, dynamic>> _friends = [
-    {
-      'name': 'Emma Reyes',
-      'username': '@emma_codes',
-      'emoji': '👧',
-      'bgColor': const Color(0xFF8F93EA),
-      'streak': 256,
-      'trophies': 457,
-    },
-    {
-      'name': 'Kevin Lim',
-      'username': '@kevdev',
-      'emoji': '🤓',
-      'bgColor': const Color(0xFFFFD56B),
-      'streak': 15,
-      'trophies': 678,
-    },
-    {
-      'name': 'Bentley Wu',
-      'username': '@bentley_w',
-      'emoji': '🧒',
-      'bgColor': const Color(0xFF8CEEAD),
-      'streak': 139,
-      'trophies': 102,
-    },
-  ];
-
-  // Mock Pending Requests List
-  final List<Map<String, dynamic>> _requests = [
-    {
-      'name': 'Sophia Cruz',
-      'username': '@sophia_c',
-      'emoji': '👩‍💻',
-      'bgColor': const Color(0xFFFFB5E8),
-    },
-    {
-      'name': 'Lucas Reyes',
-      'username': '@lucas_l',
-      'emoji': '👦',
-      'bgColor': const Color(0xFFBFFCC6),
-    },
-    {
-      'name': 'Olivia Lim',
-      'username': '@olivia_o',
-      'emoji': '👧',
-      'bgColor': const Color(0xFFFFC5A5),
-    },
+  final List<Map<String, dynamic>> _avatars = [
+    {'emoji': '🤓', 'bgColor': const Color(0xFFFFD56B), 'name': 'Nerd Boy'},
+    {'emoji': '👧', 'bgColor': const Color(0xFF8F93EA), 'name': 'Long Hair Girl'},
+    {'emoji': '👦', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Brandon'},
+    {'emoji': '👩‍💼', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Emma'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Curly Boy'},
+    {'emoji': '🧒', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Bentley'},
   ];
 
   @override
@@ -77,20 +37,121 @@ class _FriendListViewState extends State<FriendListView> {
     super.dispose();
   }
 
+  void _showRemoveFriendConfirmation(Map<String, dynamic> friend) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Remove Friend",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Remove Friend",
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Are you sure you want to remove ${friend['displayName'] ?? 'this user'} from your friends?",
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textGrey,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                            "Cancel",
+                            style: GoogleFonts.nunito(
+                              color: AppColors.textGrey,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            try {
+                              await FriendService().removeFriend(friend['uid']);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      "Removed ${friend['displayName']} from friends.",
+                                      style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+                                    ),
+                                    backgroundColor: AppColors.textDark,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              debugPrint("Error removing friend: $e");
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.googleRed,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Remove",
+                            style: GoogleFonts.nunito(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-
-    // Filter lists based on search query
-    final filteredFriends = _friends.where((f) {
-      return f['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          f['username'].toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
-
-    final filteredRequests = _requests.where((r) {
-      return r['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          r['username'].toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF56CCF2), // Premium sky blue
@@ -179,17 +240,65 @@ class _FriendListViewState extends State<FriendListView> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Active List display
+                    // Active List display with StreamBuilders
                     if (_isFriendsTabActive) ...[
-                      if (filteredFriends.isEmpty)
-                        _buildEmptyState("No friends found.")
-                      else
-                        ...filteredFriends.map((f) => _buildFriendCard(f)),
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: FriendService().streamFriends(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 32.0),
+                                child: CircularProgressIndicator(color: Color(0xFF56CCF2)),
+                              ),
+                            );
+                          }
+                          final friends = snapshot.data ?? [];
+                          final filteredFriends = friends.where((f) {
+                            final name = (f['displayName'] ?? '').toString().toLowerCase();
+                            final username = (f['username'] ?? '').toString().toLowerCase();
+                            final q = _searchQuery.toLowerCase();
+                            return name.contains(q) || username.contains(q);
+                          }).toList();
+
+                          if (filteredFriends.isEmpty) {
+                            return _buildEmptyState(_searchQuery.isEmpty ? "You don't have any friends yet." : "No friends found matching your search.");
+                          }
+
+                          return Column(
+                            children: filteredFriends.map((f) => _buildFriendCard(f)).toList(),
+                          );
+                        },
+                      ),
                     ] else ...[
-                      if (filteredRequests.isEmpty)
-                        _buildEmptyState("No pending requests.")
-                      else
-                        ...filteredRequests.map((r) => _buildRequestCard(r)),
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: FriendService().streamIncomingRequests(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 32.0),
+                                child: CircularProgressIndicator(color: Color(0xFF56CCF2)),
+                              ),
+                            );
+                          }
+                          final requests = snapshot.data ?? [];
+                          final filteredRequests = requests.where((r) {
+                            final name = (r['displayName'] ?? '').toString().toLowerCase();
+                            final username = (r['username'] ?? '').toString().toLowerCase();
+                            final q = _searchQuery.toLowerCase();
+                            return name.contains(q) || username.contains(q);
+                          }).toList();
+
+                          if (filteredRequests.isEmpty) {
+                            return _buildEmptyState(_searchQuery.isEmpty ? "No pending friend requests." : "No requests found matching your search.");
+                          }
+
+                          return Column(
+                            children: filteredRequests.map((r) => _buildRequestCard(r)).toList(),
+                          );
+                        },
+                      ),
                     ],
                   ],
                 ),
@@ -212,15 +321,6 @@ class _FriendListViewState extends State<FriendListView> {
             child: Icon(
               Icons.code_rounded,
               size: 80,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          Positioned(
-            top: statusBarHeight + 50,
-            right: 40,
-            child: Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 90,
               color: Colors.white.withValues(alpha: 0.08),
             ),
           ),
@@ -271,7 +371,7 @@ class _FriendListViewState extends State<FriendListView> {
                       fontSize: 16,
                     ),
                     decoration: InputDecoration(
-                      hintText: "Search by username",
+                      hintText: "Search by username or name",
                       hintStyle: GoogleFonts.nunito(
                         color: Colors.black.withValues(alpha: 0.25),
                         fontWeight: FontWeight.bold,
@@ -389,26 +489,33 @@ class _FriendListViewState extends State<FriendListView> {
                         fontSize: 16,
                       ),
                     ),
-                    if (_requests.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          _requests.length.toString(),
-                          style: GoogleFonts.nunito(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                    StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: FriendService().streamIncomingRequests(),
+                      builder: (context, snapshot) {
+                        final reqCount = snapshot.data?.length ?? 0;
+                        if (reqCount == 0) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 6.0),
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              reqCount.toString(),
+                              style: GoogleFonts.nunito(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -430,6 +537,7 @@ class _FriendListViewState extends State<FriendListView> {
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -437,6 +545,11 @@ class _FriendListViewState extends State<FriendListView> {
 
   // Row card representing an active friend
   Widget _buildFriendCard(Map<String, dynamic> friend) {
+    final avatarIndex = friend['avatarIndex'] ?? 0;
+    final Map<String, dynamic> avatar = (avatarIndex >= 0 && avatarIndex < _avatars.length)
+        ? _avatars[avatarIndex]
+        : _avatars[0];
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
@@ -458,12 +571,12 @@ class _FriendListViewState extends State<FriendListView> {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: friend['bgColor'],
+              color: avatar['bgColor'],
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: Text(
-              friend['emoji'],
+              avatar['emoji'],
               style: const TextStyle(fontSize: 32),
             ),
           ),
@@ -475,7 +588,7 @@ class _FriendListViewState extends State<FriendListView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  friend['name'],
+                  friend['displayName'] ?? "Codu User",
                   style: GoogleFonts.nunito(
                     color: AppColors.textDark,
                     fontWeight: FontWeight.w900,
@@ -483,7 +596,7 @@ class _FriendListViewState extends State<FriendListView> {
                   ),
                 ),
                 Text(
-                  friend['username'],
+                  "@${friend['username'] ?? 'username'}",
                   style: GoogleFonts.nunito(
                     color: AppColors.textGrey,
                     fontWeight: FontWeight.bold,
@@ -506,7 +619,7 @@ class _FriendListViewState extends State<FriendListView> {
                           const Text("🔥", style: TextStyle(fontSize: 11)),
                           const SizedBox(width: 4),
                           Text(
-                            friend['streak'].toString(),
+                            (friend['streak'] ?? 0).toString(),
                             style: GoogleFonts.nunito(
                               color: AppColors.textDark,
                               fontWeight: FontWeight.w900,
@@ -529,7 +642,7 @@ class _FriendListViewState extends State<FriendListView> {
                           const Text("🏆", style: TextStyle(fontSize: 11)),
                           const SizedBox(width: 4),
                           Text(
-                            friend['trophies'].toString(),
+                            (friend['trophies'] ?? 0).toString(),
                             style: GoogleFonts.nunito(
                               color: AppColors.textDark,
                               fontWeight: FontWeight.w900,
@@ -545,13 +658,21 @@ class _FriendListViewState extends State<FriendListView> {
             ),
           ),
 
+          // Remove Friend icon button
+          IconButton(
+            icon: const Icon(Icons.person_remove_rounded, color: Colors.grey, size: 22),
+            tooltip: "Remove friend",
+            onPressed: () => _showRemoveFriendConfirmation(friend),
+          ),
+          const SizedBox(width: 4),
+
           // 3D Challenge button
           Duo3dMiniButton(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    "Challenged ${friend['name']} to a coding duel!",
+                    "Challenged ${friend['displayName'] ?? 'friend'} to a coding duel!",
                     style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
                   ),
                   behavior: SnackBarBehavior.floating,
@@ -560,11 +681,11 @@ class _FriendListViewState extends State<FriendListView> {
             },
             faceColor: const Color(0xFF8F93EA), // Purple face color
             shadowColor: const Color(0xFF7076E3), // Darker shadow
-            width: 90,
+            width: 80,
             height: 38,
             borderRadius: 19,
             child: Text(
-              "Challenge",
+              "Duel",
               style: GoogleFonts.nunito(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
@@ -579,6 +700,11 @@ class _FriendListViewState extends State<FriendListView> {
 
   // Row card representing a pending request
   Widget _buildRequestCard(Map<String, dynamic> request) {
+    final avatarIndex = request['avatarIndex'] ?? 0;
+    final Map<String, dynamic> avatar = (avatarIndex >= 0 && avatarIndex < _avatars.length)
+        ? _avatars[avatarIndex]
+        : _avatars[0];
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
@@ -600,12 +726,12 @@ class _FriendListViewState extends State<FriendListView> {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: request['bgColor'],
+              color: avatar['bgColor'],
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: Text(
-              request['emoji'],
+              avatar['emoji'],
               style: const TextStyle(fontSize: 32),
             ),
           ),
@@ -617,7 +743,7 @@ class _FriendListViewState extends State<FriendListView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request['name'],
+                  request['displayName'] ?? "Codu User",
                   style: GoogleFonts.nunito(
                     color: AppColors.textDark,
                     fontWeight: FontWeight.w900,
@@ -625,7 +751,7 @@ class _FriendListViewState extends State<FriendListView> {
                   ),
                 ),
                 Text(
-                  request['username'],
+                  "@${request['username'] ?? 'username'}",
                   style: GoogleFonts.nunito(
                     color: AppColors.textGrey,
                     fontWeight: FontWeight.bold,
@@ -642,10 +768,12 @@ class _FriendListViewState extends State<FriendListView> {
             children: [
               // Decline Button (gray 3D)
               Duo3dMiniButton(
-                onPressed: () {
-                  setState(() {
-                    _requests.remove(request);
-                  });
+                onPressed: () async {
+                  try {
+                    await FriendService().declineFriendRequest(request['uid']);
+                  } catch (e) {
+                    debugPrint("Error declining request: $e");
+                  }
                 },
                 faceColor: const Color(0xFFE2E4E8),
                 shadowColor: const Color(0xFFC2C5CC),
@@ -657,28 +785,23 @@ class _FriendListViewState extends State<FriendListView> {
               const SizedBox(width: 8),
               // Accept Button (green 3D)
               Duo3dMiniButton(
-                onPressed: () {
-                  setState(() {
-                    _requests.remove(request);
-                    // Add to friends list with default stats
-                    _friends.add({
-                      'name': request['name'],
-                      'username': request['username'],
-                      'emoji': request['emoji'],
-                      'bgColor': request['bgColor'],
-                      'streak': 0,
-                      'trophies': 0,
-                    });
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Accepted request from ${request['name']}!",
-                        style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                onPressed: () async {
+                  try {
+                    await FriendService().acceptFriendRequest(request['uid']);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Accepted request from ${request['displayName']}!",
+                            style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint("Error accepting request: $e");
+                  }
                 },
                 faceColor: const Color(0xFF46B830), // Green face
                 shadowColor: const Color(0xFF339320), // Dark green shadow

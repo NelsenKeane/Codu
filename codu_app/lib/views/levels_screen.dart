@@ -1,6 +1,10 @@
-import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:path_drawing/path_drawing.dart';
 import '../services/user_data_service.dart';
 
 class LevelsScreen extends StatefulWidget {
@@ -10,7 +14,7 @@ class LevelsScreen extends StatefulWidget {
   State<LevelsScreen> createState() => _LevelsScreenState();
 }
 
-class _LevelsScreenState extends State<LevelsScreen> {
+class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderStateMixin {
   String _selectedSubject = 'Phyton'; // Mockup spelling
 
   final List<String> _subjects = ['Phyton', 'C++', 'Javascript', 'Java'];
@@ -19,10 +23,29 @@ class _LevelsScreenState extends State<LevelsScreen> {
   int _trophies = 0;
   bool _isLoading = true;
 
+  // SVG & Animation State variables
+  final ScrollController _scrollController = ScrollController();
+  AnimationController? _animationController;
+  Animation<double>? _animation;
+
+  PathMetric? _pathMetric;
+  List<Offset> _nodePositions = [];
+  double _scale = 1.0;
+  double _canvasHeight = 16400.0;
+  String _svgContent = '';
+  int _activeLevelIndex = 2; // Will be calculated from DB progress
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _animationController?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -32,9 +55,235 @@ class _LevelsScreenState extends State<LevelsScreen> {
       setState(() {
         _streak = streak;
         _trophies = trophies;
-        _isLoading = false;
       });
+      await _loadSvgPath();
     }
+  }
+
+  String _getSvgPath() {
+    switch (_selectedSubject) {
+      case 'Phyton':
+        return 'assets/images/Level Map 1.svg';
+      case 'C++':
+        return 'assets/images/Level Map 2.svg';
+      case 'Javascript':
+        return 'assets/images/Level Map 3.svg';
+      case 'Java':
+        return 'assets/images/Level Map 4.svg';
+      default:
+        return 'assets/images/Level Map 1.svg';
+    }
+  }
+
+  Future<void> _loadSvgPath() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final dbSubject = _selectedSubject == 'Phyton' ? 'Python' : _selectedSubject;
+      final history = await UserDataService().getHistory();
+      final subjectProgress = history.firstWhere(
+        (h) => h['lang'] == dbSubject,
+        orElse: () => <String, dynamic>{},
+      );
+
+      int completed = 0;
+      int total = 10;
+      if (subjectProgress.isNotEmpty) {
+        completed = subjectProgress['completed'] ?? 0;
+        total = subjectProgress['lessons'] ?? 10;
+      }
+      if (total == 0) total = 10;
+      _activeLevelIndex = (completed / total * 45).floor().clamp(0, 44);
+
+      String svgPath = _getSvgPath();
+      String svgString = await rootBundle.loadString(svgPath);
+
+      // Extend the starting point at the bottom from 11000 to 11400
+      final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
+      String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
+        final double x = double.parse(match.group(1)!);
+        final double vDistance = double.parse(match.group(2)!);
+        final double newVDistance = vDistance + 400.0;
+        return 'd="M$x,11400v-$newVDistance';
+      });
+
+      // Extend the ending point at the top from V0 to a beautiful curvy extension
+      final String curvyExtension = _generateCurvyExtension(svgPath: svgPath);
+      modifiedSvgPath = modifiedSvgPath.replaceFirst('V0"', curvyExtension);
+
+      RegExp regExp = RegExp(r'\bd="([^"]+)"');
+      var match = regExp.firstMatch(modifiedSvgPath);
+      if (match != null) {
+        String pathData = match.group(1)!;
+        Path path = parseSvgPathData(pathData);
+        var metrics = path.computeMetrics().toList();
+        if (metrics.isNotEmpty) {
+          _pathMetric = metrics.first;
+        }
+      }
+
+      // Remove the <style>...</style> block to prevent class parsing conflicts in flutter_svg
+      final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
+      String cleanedSvg = svgString.replaceAll(styleRegex, '');
+
+      // Adjust the viewBox to start at y = -5000 and have height = 16400
+      cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
+
+      // Extend the path starting point from 11000 to 11400 in the SVG content
+      cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
+        final double x = double.parse(match.group(1)!);
+        final double vDistance = double.parse(match.group(2)!);
+        final double newVDistance = vDistance + 400.0;
+        return 'd="M$x,11400v-$newVDistance';
+      });
+
+      // Extend the ending point at the top from V0 to a beautiful curvy extension
+      cleanedSvg = cleanedSvg.replaceFirst('V0"', curvyExtension);
+
+      // Tile background image at the top to cover the y = -5000 to 0 area
+      cleanedSvg = cleanedSvg.replaceFirst(
+        '<use transform="scale(.71)" xlink:href="#image"/>',
+        '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
+      );
+
+      // Tile background image and shift bottom transition image
+      cleanedSvg = cleanedSvg.replaceFirst(
+        '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
+        '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
+      );
+
+      // Inline the styles directly onto the elements referencing st0 and st1
+      _svgContent = cleanedSvg
+          .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
+          .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
+    } catch (e) {
+      debugPrint("Error loading or parsing SVG path: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Jump to bottom before animating to the active level so the map starts at the bottom
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            double scale = MediaQuery.of(context).size.width / 1080.0;
+            double canvasHeight = 16400.0 * scale;
+            double maxScroll = canvasHeight - MediaQuery.of(context).size.height;
+            if (maxScroll > 0) {
+              _scrollController.jumpTo(maxScroll);
+            }
+          }
+          _startAnimation();
+        });
+      }
+    }
+  }
+
+  void _updatePathPositions(double screenWidth) {
+    if (_pathMetric == null) return;
+    _scale = screenWidth / 1080.0;
+    _canvasHeight = 16400.0 * _scale;
+
+    double totalLength = _pathMetric!.length;
+    double startOffset = 550.0;
+    double endOffset = 1800.0;
+    double usableLength = totalLength - startOffset - endOffset;
+
+    List<Offset> positions = [];
+    for (int i = 0; i < 45; i++) {
+      double distance = startOffset + i * (usableLength / 44.0);
+      Tangent? tangent = _pathMetric!.getTangentForOffset(distance);
+      if (tangent != null) {
+        // Shift y-coordinate by 5000 to match viewBox shift (starts at y = -5000)
+        positions.add(Offset(tangent.position.dx * _scale, (tangent.position.dy + 5000.0) * _scale));
+      } else {
+        positions.add(Offset(screenWidth / 2, (11000.0 - (startOffset + i * (usableLength / 44.0)) + 5000.0) * _scale));
+      }
+    }
+    _nodePositions = positions;
+  }
+
+  void _startAnimation() {
+    if (_pathMetric == null) return;
+    double totalLength = _pathMetric!.length;
+    double startOffset = 550.0;
+    double endOffset = 1800.0;
+    double usableLength = totalLength - startOffset - endOffset;
+    double targetDistance = startOffset + _activeLevelIndex * (usableLength / 44.0);
+
+    _animationController?.dispose();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _animation = Tween<double>(
+      begin: startOffset,
+      end: targetDistance,
+    ).animate(CurvedAnimation(
+      parent: _animationController!,
+      curve: Curves.easeInOutCubic,
+    ))
+      ..addListener(() {
+        setState(() {});
+      });
+
+    _animationController!.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToActiveLevel();
+    });
+  }
+
+  void _scrollToActiveLevel() {
+    if (!mounted || _nodePositions.isEmpty || _activeLevelIndex >= _nodePositions.length) return;
+    double nodeY = _nodePositions[_activeLevelIndex].dy;
+    double targetScroll = nodeY - (MediaQuery.of(context).size.height / 2);
+
+    double scale = MediaQuery.of(context).size.width / 1080.0;
+    double canvasHeight = 16400.0 * scale;
+    double maxScroll = canvasHeight - MediaQuery.of(context).size.height;
+    if (maxScroll < 0) maxScroll = 0;
+    targetScroll = targetScroll.clamp(0.0, maxScroll);
+
+    _scrollController.animateTo(
+      targetScroll,
+      duration: const Duration(milliseconds: 1200),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  String _generateCurvyExtension({required String svgPath}) {
+    double xStart = 613.94; // Default for Map 1
+    if (svgPath.contains('Map 2')) {
+      xStart = 770.0;
+    } else if (svgPath.contains('Map 3') || svgPath.contains('Map 4')) {
+      xStart = 600.0;
+    }
+
+    StringBuffer sb = StringBuffer();
+    double currentY = 0;
+
+    // First Turn: Go Left from xStart to 211.81
+    double w1 = xStart - 211.81;
+    double hSegment1 = w1 - 307.92;
+    sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+    currentY -= 407.92;
+
+    // Subsequent turns: wiggle between 211.81 and 869.01 (width 657.2)
+    bool goRight = true;
+    while (currentY > -5000) {
+      if (goRight) {
+        sb.write('v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50');
+      } else {
+        sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+      }
+      currentY -= 407.92;
+      goRight = !goRight;
+    }
+    return '${sb.toString()}"';
   }
 
   void _showStreakDialog() {
@@ -143,7 +392,9 @@ class _LevelsScreenState extends State<LevelsScreen> {
                             await UserDataService().saveStreak(newStreak);
                             _loadUserData();
                           }
-                          if (mounted) Navigator.of(context).pop();
+                          if (!mounted) return;
+                          // ignore: use_build_context_synchronously
+                          Navigator.of(context).pop();
                         },
                         child: Text(
                           "Save",
@@ -270,7 +521,9 @@ class _LevelsScreenState extends State<LevelsScreen> {
                             await UserDataService().saveTrophies(newTrophies);
                             _loadUserData();
                           }
-                          if (mounted) Navigator.of(context).pop();
+                          if (!mounted) return;
+                          // ignore: use_build_context_synchronously
+                          Navigator.of(context).pop();
                         },
                         child: Text(
                           "Save",
@@ -307,61 +560,76 @@ class _LevelsScreenState extends State<LevelsScreen> {
     }
   }
 
-  // Winding path math formula: calculates horizontal center based on vertical Y coordinate
-  double _getCurveX(double y, double screenWidth) {
-    final double centerX = screenWidth / 2;
-    // Keep amplitude within bounds so nodes don't overflow the screen edges
-    final double amplitude = screenWidth * 0.22;
-    // Path frequency determines how tight the curves are
-    const double frequency = 0.005;
-    // Using a vertical offset phase shift to align the first nodes
-    return centerX + amplitude * math.sin(y * frequency + 0.2);
-  }
-
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
     final double screenWidth = MediaQuery.of(context).size.width;
 
-    // Height of our scrollable winding path canvas
-    const double pathCanvasHeight = 1600.0;
+    // Always compute canvas height proportionally — SVG viewBox is 1080×16400.
+    // This guarantees the image is NEVER stretched regardless of device width.
+    _scale = screenWidth / 1080.0;
+    _canvasHeight = 16400.0 * _scale;
+
+    if (!_isLoading && _pathMetric != null) {
+      _updatePathPositions(screenWidth);
+    }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2), // Vibrant sky blue from mockup
+      backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
         children: [
-          // 1. Background Silhouettes
+          // 1. Background Silhouettes (visible while loading)
           _buildBackgroundDecor(statusBarHeight),
 
-          // 2. Scrollable Winding Path
+          // 2. Scrollable Level Map
           Positioned.fill(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.only(
-                top: statusBarHeight + 90, // Room for header
-                bottom: 120, // Room for floating navigation bar
-              ),
-              child: SizedBox(
-                height: pathCanvasHeight,
-                width: screenWidth,
-                child: Stack(
-                  children: [
-                    // The painted winding road ribbon
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: WindingPathPainter(
-                          screenWidth: screenWidth,
-                          totalHeight: pathCanvasHeight,
-                          curveFormula: _getCurveX,
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : NotificationListener<OverscrollIndicatorNotification>(
+                    onNotification: (overscroll) {
+                      overscroll.disallowIndicator();
+                      return true;
+                    },
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      physics: const ClampingScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      child: SizedBox(
+                        // Width = screenWidth, Height = proportional to SVG aspect ratio
+                        width: screenWidth,
+                        height: _canvasHeight,
+                        child: Stack(
+                          children: [
+                            // ── SVG background ──────────────────────────────
+                            // fitWidth fills the full screen width and scales
+                            // the height proportionally — no stretching ever.
+                            Positioned.fill(
+                              child: _svgContent.isNotEmpty
+                                  ? SvgPicture.string(
+                                      _svgContent,
+                                      fit: BoxFit.fitWidth,
+                                      alignment: Alignment.topCenter,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+
+                            // ── Animated player position marker ─────────────
+                            // The SVG already draws the road; we only overlay
+                            // the player circle and level nodes on top.
+                            if (_pathMetric != null && _animation != null)
+                              _buildAnimatedProgressMarker(),
+
+                            // ── Level nodes along the path ──────────────────
+                            ..._buildLevelNodes(screenWidth),
+                          ],
                         ),
                       ),
                     ),
-
-                    // Level Nodes along the path
-                    ..._buildLevelNodes(screenWidth),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
 
           // 3. Floating Header (Subject Selector & Stats)
@@ -378,6 +646,47 @@ class _LevelsScreenState extends State<LevelsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedProgressMarker() {
+    if (_pathMetric == null || _animation == null) return const SizedBox.shrink();
+
+    double currentDistance = _animation!.value;
+    Tangent? tangent = _pathMetric!.getTangentForOffset(currentDistance);
+    if (tangent == null) return const SizedBox.shrink();
+
+    double markerX = tangent.position.dx * _scale;
+    double markerY = (tangent.position.dy + 5000.0) * _scale;
+    const double markerSize = 36.0;
+
+    return Positioned(
+      left: markerX - (markerSize / 2),
+      top: markerY - (markerSize / 2),
+      child: Container(
+        width: markerSize,
+        height: markerSize,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFB020),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 8,
+              spreadRadius: 2,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.person_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
+        ),
       ),
     );
   }
@@ -450,9 +759,12 @@ class _LevelsScreenState extends State<LevelsScreen> {
   Widget _buildSubjectDropdown() {
     return PopupMenuButton<String>(
       onSelected: (String val) {
-        setState(() {
-          _selectedSubject = val;
-        });
+        if (_selectedSubject != val) {
+          setState(() {
+            _selectedSubject = val;
+          });
+          _loadSvgPath();
+        }
       },
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -609,46 +921,65 @@ class _LevelsScreenState extends State<LevelsScreen> {
     );
   }
 
-  // Generates the level nodes positioned along the mathematical winding path
+  // Generates the level nodes positioned along the winding path from metrics
   List<Widget> _buildLevelNodes(double screenWidth) {
-    // We define our levels list: Y positions, type (completed, active, locked, crown), level number/label, stars
-    final List<Map<String, dynamic>> levels = [
-      // Top nodes are locked in the mockup
-      {'y': 100.0, 'type': 'locked', 'icon': Icons.lock_rounded},
-      {'y': 240.0, 'type': 'locked', 'icon': Icons.lock_rounded},
-      {'y': 380.0, 'type': 'locked', 'icon': Icons.lock_rounded},
-      {'y': 520.0, 'type': 'locked', 'icon': Icons.lock_rounded},
-      {'y': 660.0, 'type': 'crown', 'icon': Icons.workspace_premium_rounded}, // Crown boss level
-      {'y': 800.0, 'type': 'locked', 'icon': Icons.lock_rounded},
-      {'y': 940.0, 'type': 'active', 'level': 3}, // Level 3 active
-      {'y': 1080.0, 'type': 'completed', 'stars': 2}, // Completed with 2/3 stars
-      {'y': 1220.0, 'type': 'completed', 'stars': 3}, // Completed with 3/3 stars
-      {'y': 1360.0, 'type': 'completed', 'stars': 3},
-    ];
+    if (_nodePositions.isEmpty) return [];
+
+    final List<Map<String, dynamic>> levels = [];
+    for (int i = 44; i >= 0; i--) {
+      int levelNum = i + 1;
+      String type;
+      int stars = 0;
+
+      if (i < _activeLevelIndex) {
+        type = 'completed';
+        stars = (i % 2 == 0) ? 3 : 2;
+      } else if (i == _activeLevelIndex) {
+        type = 'active';
+      } else {
+        if (levelNum == 45) {
+          type = 'crown';
+        } else {
+          type = 'locked';
+        }
+      }
+
+      levels.add({
+        'level': levelNum,
+        'type': type,
+        'stars': stars,
+        'posIndex': i,
+      });
+    }
 
     return levels.map((level) {
-      final double nodeY = level['y'];
+      final int posIndex = level['posIndex'];
+      final Offset pos = _nodePositions[posIndex];
       final String type = level['type'];
-      final double nodeX = _getCurveX(nodeY, screenWidth);
-      const double nodeSize = 76.0;
+      final int levelNum = level['level'];
+      final bool isExam = levelNum % 6 == 0;
+      const double nodeSize = 72.0;
 
       Widget nodeChild;
       if (type == 'completed') {
-        nodeChild = LevelNodeCompleted(stars: level['stars']);
+        nodeChild = LevelNodeCompleted(stars: level['stars'], isExam: isExam);
       } else if (type == 'active') {
-        nodeChild = LevelNodeActive(levelNumber: level['level']);
+        nodeChild = LevelNodeActive(levelNumber: levelNum, isExam: isExam);
       } else if (type == 'crown') {
-        nodeChild = LevelNodeCrown();
+        nodeChild = const LevelNodeCrown();
       } else {
-        nodeChild = LevelNodeLocked();
+        nodeChild = LevelNodeLocked(isExam: isExam);
       }
 
+      final double boxWidth = nodeSize + 40;
+      final double boxHeight = nodeSize + 60;
+
       return Positioned(
-        left: nodeX - (nodeSize / 2),
-        top: nodeY,
+        left: pos.dx - (boxWidth / 2),
+        top: pos.dy - (boxHeight / 2),
         child: SizedBox(
-          width: nodeSize + 40, // extra width for stars overflow
-          height: nodeSize + 60, // extra height for tooltips and stars
+          width: boxWidth,
+          height: boxHeight,
           child: Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,
@@ -662,52 +993,48 @@ class _LevelsScreenState extends State<LevelsScreen> {
   }
 }
 
-// Custom Painter to draw the smooth wavy blue path
+// Custom Painter to draw the active progress highlight along the parsed SVG path
 class WindingPathPainter extends CustomPainter {
-  final double screenWidth;
-  final double totalHeight;
-  final double Function(double y, double width) curveFormula;
+  final PathMetric? pathMetric;
+  final double currentDistance;
+  final double scale;
 
   WindingPathPainter({
-    required this.screenWidth,
-    required this.totalHeight,
-    required this.curveFormula,
+    required this.pathMetric,
+    required this.currentDistance,
+    required this.scale,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Draw background road outline / shadow
-    final shadowPaint = Paint()
-      ..color = const Color(0xFF42A5F5).withValues(alpha: 0.15)
+    if (pathMetric == null || currentDistance <= 0) return;
+
+    // Extract the path from 0.0 to currentDistance
+    Path extractPath = pathMetric!.extractPath(0.0, currentDistance);
+
+    // Apply the scale to the path using a Float64List scale matrix
+    final Float64List scaleMatrix = Float64List(16);
+    scaleMatrix[0] = scale;  // sx
+    scaleMatrix[5] = scale;  // sy
+    scaleMatrix[10] = 1.0;   // sz
+    scaleMatrix[15] = 1.0;   // w
+    final Path scaledPath = extractPath.transform(scaleMatrix);
+
+    // Draw the active path highlight ribbon in a premium golden yellow color
+    final highlightPaint = Paint()
+      ..color = const Color(0xFFFFD56B)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 92
+      ..strokeWidth = 36.0 * scale
       ..strokeCap = StrokeCap.round;
 
-    final shadowPath = Path();
-    shadowPath.moveTo(curveFormula(0, screenWidth), 0);
-    for (double y = 2; y <= totalHeight; y += 4) {
-      shadowPath.lineTo(curveFormula(y, screenWidth), y);
-    }
-    canvas.drawPath(shadowPath, shadowPaint);
-
-    // 2. Draw active inner ribbon (light blue road)
-    final pathPaint = Paint()
-      ..color = const Color(0xFFCBEBFC) // Soft bright blue path ribbon
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 76
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    path.moveTo(curveFormula(0, screenWidth), 0);
-    for (double y = 2; y <= totalHeight; y += 4) {
-      path.lineTo(curveFormula(y, screenWidth), y);
-    }
-    canvas.drawPath(path, pathPaint);
+    canvas.drawPath(scaledPath, highlightPaint);
   }
 
   @override
   bool shouldRepaint(covariant WindingPathPainter oldDelegate) {
-    return oldDelegate.screenWidth != screenWidth || oldDelegate.totalHeight != totalHeight;
+    return oldDelegate.currentDistance != currentDistance ||
+        oldDelegate.pathMetric != pathMetric ||
+        oldDelegate.scale != scale;
   }
 }
 
@@ -790,8 +1117,9 @@ class _Duo3dCircleButtonState extends State<Duo3dCircleButton> {
 // 1. Completed Node (Yellow Circle, checkmark inside, stars above)
 class LevelNodeCompleted extends StatelessWidget {
   final int stars;
+  final bool isExam;
 
-  const LevelNodeCompleted({super.key, required this.stars});
+  const LevelNodeCompleted({super.key, required this.stars, this.isExam = false});
 
   @override
   Widget build(BuildContext context) {
@@ -799,23 +1127,17 @@ class LevelNodeCompleted extends StatelessWidget {
       alignment: Alignment.center,
       clipBehavior: Clip.none,
       children: [
-        // 3D Circle Node
-        Duo3dCircleButton(
-          faceColor: const Color(0xFFFFC043), // Rich golden yellow
-          shadowColor: const Color(0xFFE5921E), // Darker yellow/orange shadow
-          onPressed: () {},
-          size: 72,
-          child: const Icon(
-            Icons.check_rounded,
-            color: Colors.white,
-            size: 38,
-          ),
+        SvgPicture.asset(
+          isExam ? 'assets/images/Exam Completed Level.svg' : 'assets/images/FinishedLevel.svg',
+          width: 72,
+          height: 72,
         ),
         // Floating Stars Arc
-        Positioned(
-          top: -24,
-          child: _buildStarsArc(),
-        ),
+        if (!isExam)
+          Positioned(
+            top: -24,
+            child: _buildStarsArc(),
+          ),
       ],
     );
   }
@@ -869,8 +1191,9 @@ class LevelNodeCompleted extends StatelessWidget {
 // 2. Active Node (Yellow circle with white star inside, white "Level 3" tooltip bubble above)
 class LevelNodeActive extends StatelessWidget {
   final int levelNumber;
+  final bool isExam;
 
-  const LevelNodeActive({super.key, required this.levelNumber});
+  const LevelNodeActive({super.key, required this.levelNumber, this.isExam = false});
 
   @override
   Widget build(BuildContext context) {
@@ -878,17 +1201,10 @@ class LevelNodeActive extends StatelessWidget {
       alignment: Alignment.center,
       clipBehavior: Clip.none,
       children: [
-        // 3D Circle Node
-        Duo3dCircleButton(
-          faceColor: const Color(0xFFFFC043),
-          shadowColor: const Color(0xFFE5921E),
-          onPressed: () {},
-          size: 72,
-          child: const Icon(
-            Icons.star_rounded,
-            color: Colors.white,
-            size: 38,
-          ),
+        SvgPicture.asset(
+          isExam ? 'assets/images/Exam Locked Level.svg' : 'assets/images/CurrentLevel.svg',
+          width: 72,
+          height: 72,
         ),
         // Tooltip speech bubble above
         Positioned(
@@ -918,7 +1234,7 @@ class LevelNodeActive extends StatelessWidget {
             ],
           ),
           child: Text(
-            "Level $levelNumber",
+            isExam ? "Exam" : "Level $levelNumber",
             style: GoogleFonts.nunito(
               color: Colors.black,
               fontWeight: FontWeight.w900,
@@ -959,20 +1275,16 @@ class TrianglePainter extends CustomPainter {
 
 // 3. Locked Node (Gray Circle, padlock inside)
 class LevelNodeLocked extends StatelessWidget {
-  const LevelNodeLocked({super.key});
+  final bool isExam;
+
+  const LevelNodeLocked({super.key, this.isExam = false});
 
   @override
   Widget build(BuildContext context) {
-    return Duo3dCircleButton(
-      faceColor: const Color(0xFFCCCCCC), // Soft gray
-      shadowColor: const Color(0xFFB0B0B0), // Darker gray shadow
-      onPressed: null, // Disabled
-      size: 72,
-      child: const Icon(
-        Icons.lock_rounded,
-        color: Colors.white,
-        size: 32,
-      ),
+    return SvgPicture.asset(
+      isExam ? 'assets/images/Exam Locked Level.svg' : 'assets/images/Locked Level.svg',
+      width: 72,
+      height: 72,
     );
   }
 }
