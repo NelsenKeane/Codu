@@ -8,6 +8,7 @@ import 'lessons_screen.dart';
 import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
+import 'duel_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -25,6 +26,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Map<String, dynamic>> _subjects = [];
   List<Map<String, dynamic>> _history = [];
   bool _isLoadingData = true;
+  bool _showBottomBar = true;
 
   @override
   void initState() {
@@ -267,60 +269,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildPlaceholderScreen({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required String message,
-  }) {
-    return Container(
-      color: AppColors.cardBackground,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                style: GoogleFonts.nunito(
-                  color: AppColors.textDark,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.nunito(
-                  color: AppColors.textGrey,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoadingData) {
@@ -345,11 +293,14 @@ class _MainScreenState extends State<MainScreen> {
         bodyContent = const LevelsScreen();
         break;
       case 2:
-        bodyContent = _buildPlaceholderScreen(
-          title: "Explore",
-          icon: Icons.public_rounded,
-          color: Colors.teal,
-          message: "Connect and share your coding journey with users worldwide!",
+        bodyContent = DuelScreen(
+          onShowBottomBarChanged: (show) {
+            if (mounted) {
+              setState(() {
+                _showBottomBar = show;
+              });
+            }
+          },
         );
         break;
       case 3:
@@ -367,7 +318,7 @@ class _MainScreenState extends State<MainScreen> {
       body: Stack(
         children: [
           // SVG background for tabs that don't have their own (home, explore, leaderboard)
-          if (_selectedNavIndex != 1 && _selectedNavIndex != 4)
+          if (_selectedNavIndex != 1 && _selectedNavIndex != 2 && _selectedNavIndex != 4)
             Positioned.fill(
               child: SvgPicture.asset(
                 'assets/images/codu_background_pattern_mobile_soft.svg',
@@ -378,12 +329,13 @@ class _MainScreenState extends State<MainScreen> {
           Positioned.fill(child: bodyContent),
 
           // Floating Bottom Navigation Bar
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 24,
-            child: _buildBottomNavigationBar(),
-          ),
+          if (_showBottomBar)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 24,
+              child: _buildBottomNavigationBar(),
+            ),
         ],
       ),
     );
@@ -950,6 +902,7 @@ class _MainScreenState extends State<MainScreen> {
       onTap: () {
         setState(() {
           _selectedNavIndex = index;
+          _showBottomBar = true;
         });
         _loadUserData();
       },
