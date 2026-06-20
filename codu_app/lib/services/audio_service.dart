@@ -12,10 +12,16 @@ class AudioService {
   double _musicVolume = 0.8;
   double _sfxVolume = 1.0;
 
-  // Active Players
+  // Active Music Player & State
   AudioPlayer? _musicPlayer;
-  AudioPlayer? _timeRunningOutPlayer;
   String? _currentMusicAsset;
+
+  // Dedicated Preloaded SFX Players
+  AudioPlayer? _correctPlayer;
+  AudioPlayer? _wrongPlayer;
+  AudioPlayer? _completedPlayer;
+  AudioPlayer? _completedLosePlayer;
+  AudioPlayer? _timeRunningOutPlayer;
 
   // Getters
   double get masterVolume => _masterVolume;
@@ -27,32 +33,75 @@ class AudioService {
   static const String _keyMusicVolume = 'audio_music_volume';
   static const String _keySfxVolume = 'audio_sfx_volume';
 
-  /// Initialize and load volumes from SharedPreferences
+  /// Initialize and load volumes from SharedPreferences, preloading sound effects
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _masterVolume = prefs.getDouble(_keyMasterVolume) ?? 1.0;
     _musicVolume = prefs.getDouble(_keyMusicVolume) ?? 0.8;
     _sfxVolume = prefs.getDouble(_keySfxVolume) ?? 1.0;
 
-    // Set global audio context to allow mixing sound effects with background music
+    // Instantiate all players
+    _musicPlayer = AudioPlayer();
+    _correctPlayer = AudioPlayer();
+    _wrongPlayer = AudioPlayer();
+    _completedPlayer = AudioPlayer();
+    _completedLosePlayer = AudioPlayer();
+    _timeRunningOutPlayer = AudioPlayer();
+
+    // Configure the background music player context (gain focus, playback category)
     try {
-      await AudioPlayer.global.setAudioContext(
+      await _musicPlayer!.setAudioContext(
         AudioContext(
           android: AudioContextAndroid(
             contentType: AndroidContentType.music,
             usageType: AndroidUsageType.media,
-            audioFocus: AndroidAudioFocus.none,
+            audioFocus: AndroidAudioFocus.gain,
           ),
           iOS: AudioContextIOS(
-            category: AVAudioSessionCategory.ambient,
+            category: AVAudioSessionCategory.playback,
             options: {AVAudioSessionOptions.mixWithOthers},
           ),
         ),
       );
     } catch (e) {
       // ignore: avoid_print
-      print("AudioService: Failed to set global audio context: $e");
+      print("AudioService: Failed to configure music player context: $e");
     }
+
+    // Configure SFX players context (no focus, ambient/mix category)
+    final sfxContext = AudioContext(
+      android: AudioContextAndroid(
+        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.assistanceSonification,
+        audioFocus: AndroidAudioFocus.none,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.ambient,
+        options: {AVAudioSessionOptions.mixWithOthers},
+      ),
+    );
+
+    // Apply SFX context and set sources to preload audio into memory
+    final List<Future<void>> preloads = [
+      _correctPlayer!.setAudioContext(sfxContext).then((_) => _correctPlayer!.setSource(AssetSource('Audio/Correct.mp3'))),
+      _wrongPlayer!.setAudioContext(sfxContext).then((_) => _wrongPlayer!.setSource(AssetSource('Audio/Wrong.mp3'))),
+      _completedPlayer!.setAudioContext(sfxContext).then((_) => _completedPlayer!.setSource(AssetSource('Audio/Completed.mp3'))),
+      _completedLosePlayer!.setAudioContext(sfxContext).then((_) => _completedLosePlayer!.setSource(AssetSource('Audio/CompletedLose.mp3'))),
+      _timeRunningOutPlayer!.setAudioContext(sfxContext).then((_) => _timeRunningOutPlayer!.setSource(AssetSource('Audio/TimeRunningOut.mp3'))),
+    ];
+
+    try {
+      await Future.wait(preloads);
+      // ignore: avoid_print
+      print("AudioService: Successfully preloaded all sound effects.");
+    } catch (e) {
+      // ignore: avoid_print
+      print("AudioService Error: Failed during preloading audio assets: $e");
+    }
+
+    // Set initial volumes
+    _updateMusicPlayerVolume();
+    _updateSfxPlayersVolume();
   }
 
   /// Update Master Volume
@@ -61,6 +110,7 @@ class AudioService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyMasterVolume, _masterVolume);
     _updateMusicPlayerVolume();
+    _updateSfxPlayersVolume();
   }
 
   /// Update Music Volume
@@ -76,11 +126,7 @@ class AudioService {
     _sfxVolume = value.clamp(0.0, 1.0);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keySfxVolume, _sfxVolume);
-    
-    // If time running out player is currently playing, update its volume
-    if (_timeRunningOutPlayer != null) {
-      await _timeRunningOutPlayer!.setVolume(_masterVolume * _sfxVolume);
-    }
+    _updateSfxPlayersVolume();
   }
 
   /// Calculate effective music volume
@@ -96,6 +142,16 @@ class AudioService {
     }
   }
 
+  /// Update volume of all SFX players
+  void _updateSfxPlayersVolume() {
+    final sfxVol = _effectiveSfxVolume;
+    _correctPlayer?.setVolume(sfxVol);
+    _wrongPlayer?.setVolume(sfxVol);
+    _completedPlayer?.setVolume(sfxVol);
+    _completedLosePlayer?.setVolume(sfxVol);
+    _timeRunningOutPlayer?.setVolume(sfxVol);
+  }
+
   /// Play background music (loops indefinitely)
   Future<void> playMusic(String assetPath) async {
     // If it's already playing the same music, do nothing
@@ -107,14 +163,11 @@ class AudioService {
       await stopMusic();
 
       _currentMusicAsset = assetPath;
-      _musicPlayer = AudioPlayer();
       await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
       await _musicPlayer!.setVolume(_effectiveMusicVolume);
       // ignore: avoid_print
       print("AudioService: Attempting to play background music: $assetPath (Volume: $_effectiveMusicVolume)");
       await _musicPlayer!.play(AssetSource(assetPath));
-      // ignore: avoid_print
-      print("AudioService: Successfully started playing music: $assetPath");
     } catch (e, stack) {
       // ignore: avoid_print
       print("AudioService Error: Failed to play music $assetPath: $e");
@@ -126,53 +179,71 @@ class AudioService {
   /// Stop background music
   Future<void> stopMusic() async {
     if (_musicPlayer != null) {
-      await _musicPlayer!.stop();
-      await _musicPlayer!.dispose();
-      _musicPlayer = null;
+      try {
+        await _musicPlayer!.stop();
+      } catch (e) {
+        // Safe catch
+      }
       _currentMusicAsset = null;
     }
   }
 
   /// Play a one-shot Sound Effect (SFX)
   Future<void> playSfx(String assetPath) async {
-    try {
-      final player = AudioPlayer();
-      await player.setVolume(_effectiveSfxVolume);
-      // ignore: avoid_print
-      print("AudioService: Attempting to play SFX: $assetPath (Volume: $_effectiveSfxVolume)");
-      await player.play(AssetSource(assetPath));
-      
-      // Auto-dispose player when playback completes
-      player.onPlayerComplete.listen((_) {
-        player.dispose();
-      });
-    } catch (e, stack) {
-      // ignore: avoid_print
-      print("AudioService Error: Failed to play SFX $assetPath: $e");
-      // ignore: avoid_print
-      print(stack);
+    AudioPlayer? player;
+    if (assetPath == 'Audio/Correct.mp3') {
+      player = _correctPlayer;
+    } else if (assetPath == 'Audio/Wrong.mp3') {
+      player = _wrongPlayer;
+    } else if (assetPath == 'Audio/Completed.mp3') {
+      player = _completedPlayer;
+    } else if (assetPath == 'Audio/CompletedLose.mp3') {
+      player = _completedLosePlayer;
+    }
+
+    if (player != null) {
+      try {
+        // Seek to beginning and resume for near-instant latency
+        await player.stop();
+        await player.seek(Duration.zero);
+        await player.resume();
+        // ignore: avoid_print
+        print("AudioService: Instantly playing preloaded SFX: $assetPath");
+      } catch (e) {
+        // ignore: avoid_print
+        print("AudioService Error: Failed to play preloaded SFX $assetPath: $e");
+      }
+    } else {
+      // Fallback for other audio files not in the preloaded set
+      try {
+        final fallbackPlayer = AudioPlayer();
+        await fallbackPlayer.setVolume(_effectiveSfxVolume);
+        // ignore: avoid_print
+        print("AudioService: Playing fallback SFX: $assetPath");
+        await fallbackPlayer.play(AssetSource(assetPath));
+        fallbackPlayer.onPlayerComplete.listen((_) => fallbackPlayer.dispose());
+      } catch (e) {
+        // ignore: avoid_print
+        print("AudioService Error: Failed to play fallback SFX $assetPath: $e");
+      }
     }
   }
 
   /// Play the time running out ticking warning
   Future<void> playTimeRunningOut() async {
-    try {
-      await stopTimeRunningOut();
-
-      _timeRunningOutPlayer = AudioPlayer();
-      await _timeRunningOutPlayer!.setVolume(_effectiveSfxVolume);
-      // ignore: avoid_print
-      print("AudioService: Attempting to play TimeRunningOut SFX (Volume: $_effectiveSfxVolume)");
-      await _timeRunningOutPlayer!.play(AssetSource('Audio/TimeRunningOut.mp3'));
-      
-      _timeRunningOutPlayer!.onPlayerComplete.listen((_) {
-        stopTimeRunningOut();
-      });
-    } catch (e, stack) {
-      // ignore: avoid_print
-      print("AudioService Error: Failed to play TimeRunningOut warning: $e");
-      // ignore: avoid_print
-      print(stack);
+    if (_timeRunningOutPlayer != null) {
+      try {
+        await _timeRunningOutPlayer!.stop();
+        await _timeRunningOutPlayer!.seek(Duration.zero);
+        await _timeRunningOutPlayer!.resume();
+        // ignore: avoid_print
+        print("AudioService: Instantly playing TimeRunningOut ticking warning");
+      } catch (e, stack) {
+        // ignore: avoid_print
+        print("AudioService Error: Failed to play TimeRunningOut warning: $e");
+        // ignore: avoid_print
+        print(stack);
+      }
     }
   }
 
@@ -181,11 +252,9 @@ class AudioService {
     if (_timeRunningOutPlayer != null) {
       try {
         await _timeRunningOutPlayer!.stop();
-        await _timeRunningOutPlayer!.dispose();
       } catch (e) {
-        // Safe catch if already disposed
+        // Safe catch
       }
-      _timeRunningOutPlayer = null;
     }
   }
 }
