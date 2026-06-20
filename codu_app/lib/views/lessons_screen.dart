@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/user_data_service.dart';
 
 class LessonsScreen extends StatefulWidget {
   const LessonsScreen({super.key});
@@ -11,6 +12,8 @@ class LessonsScreen extends StatefulWidget {
 
 class _LessonsScreenState extends State<LessonsScreen> {
   String _selectedSubject = 'All';
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _lessons = [];
 
   final List<Map<String, dynamic>> _subjects = [
     {'name': 'All', 'color': AppColors.purple},
@@ -20,117 +23,183 @@ class _LessonsScreenState extends State<LessonsScreen> {
     {'name': 'Java', 'color': Colors.red},
   ];
 
-  final List<Map<String, dynamic>> _lessons = [
-    // Python Lessons
-    {
-      'id': 'py-1',
-      'subject': 'Python',
-      'title': 'Introduction & Setup',
-      'duration': '10 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'py-2',
-      'subject': 'Python',
-      'title': 'Variables & Data Types',
-      'duration': '15 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'py-3',
-      'subject': 'Python',
-      'title': 'Conditional Statements',
-      'duration': '12 mins',
-      'status': 'In Progress',
-    },
-    {
-      'id': 'py-4',
-      'subject': 'Python',
-      'title': 'Loops & Iterations',
-      'duration': '18 mins',
-      'status': 'Locked',
-    },
-    {
-      'id': 'py-5',
-      'subject': 'Python',
-      'title': 'Functions & Modules',
-      'duration': '20 mins',
-      'status': 'Locked',
-    },
-    // C++ Lessons
-    {
-      'id': 'cpp-1',
-      'subject': 'C++',
-      'title': 'C++ Basic Syntax',
-      'duration': '12 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'cpp-2',
-      'subject': 'C++',
-      'title': 'Pointers & References',
-      'duration': '25 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'cpp-3',
-      'subject': 'C++',
-      'title': 'Memory Management',
-      'duration': '22 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'cpp-4',
-      'subject': 'C++',
-      'title': 'Object-Oriented Programming',
-      'duration': '30 mins',
-      'status': 'Completed',
-    },
-    // Javascript Lessons
-    {
-      'id': 'js-1',
-      'subject': 'Javascript',
-      'title': 'JS Engine & Scope',
-      'duration': '15 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'js-2',
-      'subject': 'Javascript',
-      'title': 'DOM Manipulation',
-      'duration': '20 mins',
-      'status': 'In Progress',
-    },
-    {
-      'id': 'js-3',
-      'subject': 'Javascript',
-      'title': 'Asynchronous JS (Promises)',
-      'duration': '25 mins',
-      'status': 'Locked',
-    },
-    // Java Lessons
-    {
-      'id': 'java-1',
-      'subject': 'Java',
-      'title': 'JVM & JDK Setup',
-      'duration': '10 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'java-2',
-      'subject': 'Java',
-      'title': 'Classes & Inheritance',
-      'duration': '18 mins',
-      'status': 'Completed',
-    },
-    {
-      'id': 'java-3',
-      'subject': 'Java',
-      'title': 'Multithreading in Java',
-      'duration': '28 mins',
-      'status': 'Completed',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadLessons();
+  }
+
+  Future<void> _loadLessons() async {
+    final lessons = await UserDataService().getLessons();
+    if (mounted) {
+      setState(() {
+        _lessons = lessons;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _updateLessonStatus(Map<String, dynamic> lesson, String newStatus) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // 1. Update the lesson status in local list
+    for (var l in _lessons) {
+      if (l['id'] == lesson['id']) {
+        l['status'] = newStatus;
+      }
+    }
+
+    // 2. Save lessons
+    await UserDataService().saveLessons(_lessons);
+
+    // 3. Recalculate subjects and history progress
+    final history = await UserDataService().getHistory();
+
+    // Group lessons by subject and update status
+    for (var subjectName in ['Python', 'C++', 'Javascript', 'Java']) {
+      final subjectLessons = _lessons.where((l) => l['subject'] == subjectName).toList();
+      final totalCount = subjectLessons.length;
+      if (totalCount == 0) continue;
+
+      final completedCount = subjectLessons.where((l) => l['status'] == 'Completed').toList().length;
+      final completedPercent = completedCount / totalCount;
+
+      // Update history card progress
+      for (var h in history) {
+        if (h['lang'] == subjectName) {
+          int mockTotal = h['lessons'] ?? 50;
+          h['completed'] = (completedPercent * mockTotal).round();
+          if (completedPercent == 1.0) {
+            h['status'] = 'Completed';
+          } else if (completedPercent == 0.0) {
+            h['status'] = 'Locked'; // Or not started, but let's keep status consistent
+          } else {
+            h['status'] = 'In Progress';
+          }
+        }
+      }
+    }
+
+    await UserDataService().saveHistory(history);
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showStatusDialog(Map<String, dynamic> lesson) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Update Lesson Status",
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.8,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Update Status",
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    lesson['title'],
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunito(
+                      color: AppColors.textGrey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildStatusOption(lesson, "Completed", AppColors.green, Icons.check_circle),
+                  _buildStatusOption(lesson, "In Progress", AppColors.yellow, Icons.play_circle_fill),
+                  _buildStatusOption(lesson, "Locked", AppColors.textGrey, Icons.lock_outline),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      "Cancel",
+                      style: GoogleFonts.nunito(
+                        color: AppColors.textGrey,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusOption(Map<String, dynamic> lesson, String status, Color color, IconData icon) {
+    final isSelected = lesson['status'] == status;
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).pop();
+        _updateLessonStatus(lesson, status);
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                status,
+                style: GoogleFonts.nunito(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check, color: color, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,14 +234,20 @@ class _LessonsScreenState extends State<LessonsScreen> {
                   topLeft: Radius.circular(32),
                   topRight: Radius.circular(32),
                 ),
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-                  itemCount: filteredLessons.length,
-                  itemBuilder: (context, index) {
-                    final lesson = filteredLessons[index];
-                    return _buildLessonCard(lesson, index + 1);
-                  },
-                ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.purple),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                        itemCount: filteredLessons.length,
+                        itemBuilder: (context, index) {
+                          final lesson = filteredLessons[index];
+                          return _buildLessonCard(lesson, index + 1);
+                        },
+                      ),
               ),
             ),
           ),
@@ -296,6 +371,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
         ],
       ),
       child: ListTile(
+        onTap: () => _showStatusDialog(lesson),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         leading: Container(
           width: 44,

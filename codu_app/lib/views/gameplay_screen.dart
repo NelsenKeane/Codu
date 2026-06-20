@@ -779,54 +779,15 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
       builder: (context, candidateData, rejectedData) {
         if (placedIndex != null) {
           final String placedValue = question.choices[placedIndex];
-          bool isHovered = false;
-          return StatefulBuilder(
-            builder: (context, setSubState) {
-              return MouseRegion(
-                onEnter: (_) => setSubState(() => isHovered = true),
-                onExit: (_) => setSubState(() => isHovered = false),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (_hasChecked) return;
-                        setState(() {
-                          _slotContents[slotId] = null;
-                        });
-                      },
-                      child: _buildChoiceChip(placedValue, isSlottedStyle: true),
-                    ),
-                    if (isHovered && !_hasChecked)
-                      Positioned(
-                        top: -8,
-                        right: -8,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _slotContents[slotId] = null;
-                            });
-                          },
-                          child: Container(
-                            width: 18,
-                            height: 18,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFE55353),
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 11,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              );
+          // Render slotted chip
+          return GestureDetector(
+            onTap: () {
+              if (_hasChecked) return;
+              setState(() {
+                _slotContents[slotId] = null;
+              });
             },
+            child: _buildChoiceChip(placedValue, isSlottedStyle: true),
           );
         } else {
           // Render dashed border empty target

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/user_data_service.dart';
 import '../services/friend_service.dart';
@@ -8,7 +8,6 @@ import 'lessons_screen.dart';
 import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
-import 'duel_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -26,7 +25,6 @@ class _MainScreenState extends State<MainScreen> {
   List<Map<String, dynamic>> _subjects = [];
   List<Map<String, dynamic>> _history = [];
   bool _isLoadingData = true;
-  bool _showBottomBar = true;
 
   @override
   void initState() {
@@ -189,7 +187,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildHomeDashboard(double statusBarHeight) {
-    // Filter subjects and history based on search query
     final filteredSubjects = _subjects
         .where((s) => s['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
@@ -270,6 +267,60 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _buildPlaceholderScreen({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required String message,
+  }) {
+    return Container(
+      color: AppColors.cardBackground,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                title,
+                style: GoogleFonts.nunito(
+                  color: AppColors.textDark,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.nunito(
+                  color: AppColors.textGrey,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingData) {
@@ -294,14 +345,11 @@ class _MainScreenState extends State<MainScreen> {
         bodyContent = const LevelsScreen();
         break;
       case 2:
-        bodyContent = DuelScreen(
-          onShowBottomBarChanged: (show) {
-            if (mounted) {
-              setState(() {
-                _showBottomBar = show;
-              });
-            }
-          },
+        bodyContent = _buildPlaceholderScreen(
+          title: "Explore",
+          icon: Icons.public_rounded,
+          color: Colors.teal,
+          message: "Connect and share your coding journey with users worldwide!",
         );
         break;
       case 3:
@@ -319,114 +367,36 @@ class _MainScreenState extends State<MainScreen> {
       body: Stack(
         children: [
           // SVG background for tabs that don't have their own (home, explore, leaderboard)
-          if (_selectedNavIndex != 1 && _selectedNavIndex != 2 && _selectedNavIndex != 4)
+          if (_selectedNavIndex != 1 && _selectedNavIndex != 4)
             Positioned.fill(
               child: SvgPicture.asset(
                 'assets/images/codu_background_pattern_mobile_soft.svg',
                 fit: BoxFit.cover,
               ),
             ),
-
-          Positioned.fill(
-            child: bodyContent,
-          ),
+          // Screen Body Content
+          Positioned.fill(child: bodyContent),
 
           // Floating Bottom Navigation Bar
-          if (_showBottomBar)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 24,
-              child: _buildBottomNavigationBar(),
-            ),
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: _buildBottomNavigationBar(),
+          ),
         ],
       ),
     );
   }
-
   // Header Area Widget
   Widget _buildHeader(double statusBarHeight) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Decorative Speech Bubble Silhouettes (Lighter sky blue)
-        Positioned(
-          top: statusBarHeight - 10,
-          right: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 110,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          top: statusBarHeight + 35,
-          left: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 90,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 5,
-          right: 35,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 70,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 20,
-          left: 100,
-          child: Icon(
-            Icons.code_rounded,
-            size: 40,
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-
-        // Header Content
-        Padding(
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 16,
-            left: 20,
-            right: 20,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Code icon </> in the top-left
-              _buildCodeLogo(),
-              const SizedBox(height: 8),
-              // Mascot and Speech Bubble
-              _buildMascotHeader(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Code Icon Logo Widget
-  Widget _buildCodeLogo() {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.06),
-        shape: BoxShape.circle,
+    return Padding(
+      padding: EdgeInsets.only(
+        top: statusBarHeight + 10,
+        left: 20,
+        right: 20,
       ),
-      alignment: Alignment.center,
-      child: Text(
-        "</>",
-        style: GoogleFonts.nunito(
-          color: const Color(0xFF1D83B5).withValues(alpha: 0.6),
-          fontWeight: FontWeight.w900,
-          fontSize: 18,
-        ),
-      ),
+      child: _buildMascotHeader(),
     );
   }
 
@@ -436,20 +406,23 @@ class _MainScreenState extends State<MainScreen> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Mascot
-        Container(
-          width: 130,
-          height: 130,
-          alignment: Alignment.bottomCenter,
-          child: Image.asset(
-            'assets/images/codu_mascot.png',
-            fit: BoxFit.contain,
+        Transform.translate(
+          offset: const Offset(0, 35),
+          child: Container(
+            width: 175,
+            height: 175,
+            alignment: Alignment.bottomCenter,
+            child: Image.asset(
+              'assets/images/codu_mascot.png',
+              fit: BoxFit.contain,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         // Speech Bubble
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 24.0),
+            padding: const EdgeInsets.only(bottom: 12.0),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -579,7 +552,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _streak.toString(),
+                    "$_streak",
                     style: GoogleFonts.nunito(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -652,40 +625,22 @@ class _MainScreenState extends State<MainScreen> {
         itemCount: list.length,
         itemBuilder: (context, index) {
           final subject = list[index];
-          
-          // Helper to get Color safely from subject data
-          Color c1 = Colors.blue;
-          Color c2 = Colors.blueAccent;
-          if (subject['color1'] is Color) {
-            c1 = subject['color1'];
-          } else if (subject['color1'] is int) {
-            c1 = Color(subject['color1']);
-          } else if (subject['color1'] is String) {
-            final parsed = int.tryParse(subject['color1']);
-            if (parsed != null) c1 = Color(parsed);
-          }
-          if (subject['color2'] is Color) {
-            c2 = subject['color2'];
-          } else if (subject['color2'] is int) {
-            c2 = Color(subject['color2']);
-          } else if (subject['color2'] is String) {
-            final parsed = int.tryParse(subject['color2']);
-            if (parsed != null) c2 = Color(parsed);
-          }
-
           return Container(
             width: 200,
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [c1, c2],
+                colors: [
+                  Color(subject['color1'] is int ? subject['color1'] : int.parse(subject['color1'].toString())),
+                  Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: c2.withValues(alpha: 0.3),
+                  color: Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())).withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -699,7 +654,7 @@ class _MainScreenState extends State<MainScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildLanguageBadge(subject['lang'] ?? ''),
+                    _buildLanguageBadge(subject['lang']),
                     Container(
                       width: 24,
                       height: 24,
@@ -719,7 +674,7 @@ class _MainScreenState extends State<MainScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      subject['title'] ?? '',
+                      subject['title'],
                       style: GoogleFonts.nunito(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -729,7 +684,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "${subject['lessons'] ?? 0} Lessons",
+                      "${subject['lessons']} Lessons",
                       style: GoogleFonts.nunito(
                         color: Colors.white.withValues(alpha: 0.7),
                         fontWeight: FontWeight.bold,
@@ -790,10 +745,6 @@ class _MainScreenState extends State<MainScreen> {
     bool isCompleted = item['status'] == 'Completed';
     Color themeColor = isCompleted ? AppColors.green : AppColors.yellow;
 
-    final completedCount = item['completed'] ?? 0;
-    final totalLessons = item['lessons'] ?? 45;
-    final double progressVal = totalLessons > 0 ? (completedCount / totalLessons) : 0.0;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -814,7 +765,7 @@ class _MainScreenState extends State<MainScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildLanguageBadge(item['lang'] ?? ''),
+              _buildLanguageBadge(item['lang']),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -822,7 +773,7 @@ class _MainScreenState extends State<MainScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  item['status'] ?? '',
+                  item['status'],
                   style: GoogleFonts.nunito(
                     color: themeColor,
                     fontWeight: FontWeight.w900,
@@ -835,7 +786,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 12),
           // Title
           Text(
-            item['title'] ?? '',
+            item['title'],
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.nunito(
@@ -847,7 +798,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 2),
           // Subtitle
           Text(
-            "${totalLessons} Lessons",
+            "${item['lessons']} Lessons",
             style: GoogleFonts.nunito(
               color: AppColors.textGrey,
               fontWeight: FontWeight.bold,
@@ -857,7 +808,7 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 12),
           // Progress text
           Text(
-            "${completedCount} of ${totalLessons} Completed",
+            "${item['completed']} of ${item['lessons']} Completed",
             style: GoogleFonts.nunito(
               color: AppColors.textGrey,
               fontWeight: FontWeight.w800,
@@ -869,7 +820,7 @@ class _MainScreenState extends State<MainScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
             child: LinearProgressIndicator(
-              value: progressVal,
+              value: item['completed'] / item['lessons'],
               backgroundColor: const Color(0xFFF0F2F6),
               valueColor: AlwaysStoppedAnimation<Color>(themeColor),
               minHeight: 4,
@@ -985,7 +936,7 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           _buildNavItem(0, Icons.home_rounded, Colors.orange),
           _buildNavItem(1, Icons.menu_book_rounded, Colors.blue),
-          _buildNavItem(2, Icons.public_rounded, Colors.teal),
+          _buildNavItem(2, Icons.sports_esports_rounded, Colors.teal),
           _buildNavItem(3, Icons.emoji_events_rounded, Colors.orangeAccent),
           _buildNavItem(4, Icons.person_rounded, Colors.purple),
         ],
@@ -999,8 +950,8 @@ class _MainScreenState extends State<MainScreen> {
       onTap: () {
         setState(() {
           _selectedNavIndex = index;
-          _showBottomBar = true;
         });
+        _loadUserData();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

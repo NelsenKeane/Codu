@@ -35,6 +35,12 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_fonts: ^6.1.0
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.8
+  shared_preferences: ^2.5.5
+  flutter_svg: ^2.3.0
+  cloud_firestore: ^4.17.5
+  path_drawing: ^1.0.1
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +66,9 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/Characters/
+    - assets/images/CoduExpression/
+    - assets/images/Badge/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

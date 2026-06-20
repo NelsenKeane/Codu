@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 import 'views/login_screen.dart';
+import 'views/main_screen.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+    debugPrint('Make sure you run "flutterfire configure" or add configuration files.');
+  }
   runApp(const MyApp());
 }
 
@@ -31,7 +45,25 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const LoginScreen(),
+      home: StreamBuilder<User?>(
+        stream: AuthService().authStateChanges,
+        builder: (context, snapshot) {
+          // If connection state is waiting, show a simple loading indicator
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          // If we have an active user session, direct to MainScreen
+          if (snapshot.hasData && snapshot.data != null) {
+            return const MainScreen();
+          }
+          // Otherwise, show LoginScreen
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }

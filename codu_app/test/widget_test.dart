@@ -1,45 +1,38 @@
-import 'package:flutter/material.dart';
+// This is a basic Flutter widget test for MyApp.
+//
+// To perform an interaction with a widget in your test, use the WidgetTester
+// utility in the flutter_test package. For example, you can send tap and scroll
+// gestures. You can also use WidgetTester to find child widgets in the widget
+// tree, read text, and verify that the values of widget properties are correct.
+
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:codu_app/main.dart';
-import 'package:codu_app/views/login_screen.dart';
 
 void main() {
-  testWidgets('Login Screen initial state and tab switching smoke test', (WidgetTester tester) async {
+  testWidgets('Login screen tab switching test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
 
-    // Verify we are on the login screen and the email input field is present.
-    // In initial state (Sign In):
-    // - LOG IN tab + LOG IN button = 2 widgets
-    // - REGISTER tab = 1 widget
-    expect(find.text('LOG IN'), findsNWidgets(2));
-    expect(find.text('REGISTER'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Email Address'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
+    // Verify that the login screen starts with "Welcome Back !" in the speech bubble.
+    expect(find.text('Welcome Back !'), findsOneWidget);
+    expect(find.text('Lets Get Started !'), findsNothing);
 
-    // Tap the REGISTER tab
+    // Tap the 'REGISTER' tab and trigger a frame.
     await tester.tap(find.text('REGISTER'));
     await tester.pumpAndSettle();
 
-    // In Register state:
-    // - REGISTER tab + REGISTER button = 2 widgets
-    // - LOG IN tab = 1 widget
-    expect(find.text('REGISTER'), findsNWidgets(2));
-    expect(find.text('LOG IN'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Username'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Confirm Password'), findsOneWidget);
+    // Verify that the speech bubble updates to "Lets Get Started !".
+    expect(find.text('Welcome Back !'), findsNothing);
+    expect(find.text('Lets Get Started !'), findsOneWidget);
 
-    // Tap LOG IN tab to go back
+    // Tap the 'LOG IN' tab and trigger a frame.
     await tester.tap(find.text('LOG IN'));
     await tester.pumpAndSettle();
 
-    // Tap Forgot Password link
-    expect(find.text('Forgot Password?'), findsOneWidget);
-    await tester.tap(find.text('Forgot Password?'));
-    await tester.pumpAndSettle();
-
-    // Verify Forgot Password screen is shown
-    expect(find.text('Forgot Password'), findsOneWidget);
-    expect(find.text('SEND LINK'), findsOneWidget);
+    // Verify that the speech bubble resets to "Welcome Back !".
+    expect(find.text('Welcome Back !'), findsOneWidget);
+    expect(find.text('Lets Get Started !'), findsNothing);
   });
 }
+

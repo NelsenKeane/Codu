@@ -1,18 +1,12 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
 import '../widgets/duo_3d_button.dart';
-import '../widgets/otp_input.dart';
+import '../services/auth_service.dart';
 import 'main_screen.dart';
-
-enum LoginViewState {
-  login,
-  forgotPassword,
-  checkEmail,
-  register,
-  verifyEmail,
-}
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,103 +16,205 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  LoginViewState _viewState = LoginViewState.login;
+  bool _isSignIn = true; // Tab state
   bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
+  bool _isLoading = false;
 
   // Controllers
-  final TextEditingController _loginEmailController = TextEditingController();
-  final TextEditingController _loginPasswordController = TextEditingController();
-  
-  final TextEditingController _registerEmailController = TextEditingController();
-  final TextEditingController _registerUsernameController = TextEditingController();
-  final TextEditingController _registerPasswordController = TextEditingController();
-  final TextEditingController _registerConfirmPasswordController = TextEditingController();
-  
-  final TextEditingController _forgotEmailController = TextEditingController();
-  
-  String _otpCode = "";
+  final TextEditingController _usernameController = TextEditingController(); // Sign-in email
+  final TextEditingController _emailController = TextEditingController();    // Sign-up email
+  final TextEditingController _signUpUsernameController = TextEditingController(); // Sign-up username
+  final TextEditingController _passwordController = TextEditingController(); // Password
+  final TextEditingController _confirmPasswordController = TextEditingController(); // Confirm password
 
-  // Focus nodes
-  final FocusNode _loginEmailFocus = FocusNode();
-  final FocusNode _loginPasswordFocus = FocusNode();
-  final FocusNode _registerEmailFocus = FocusNode();
-  final FocusNode _registerUsernameFocus = FocusNode();
-  final FocusNode _registerPasswordFocus = FocusNode();
-  final FocusNode _registerConfirmPasswordFocus = FocusNode();
-  final FocusNode _forgotEmailFocus = FocusNode();
-
-  // Timer fields for OTP Resend
-  Timer? _resendTimer;
-  int _secondsRemaining = 60;
-  bool _canResend = false;
+  // Focus nodes to track active states
+  final FocusNode _usernameFocus = FocusNode();
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _signUpUsernameFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+  final FocusNode _confirmPasswordFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    // Add focus listeners to rebuild for focus states
-    _loginEmailFocus.addListener(_onFocusChange);
-    _loginPasswordFocus.addListener(_onFocusChange);
-    _registerEmailFocus.addListener(_onFocusChange);
-    _registerUsernameFocus.addListener(_onFocusChange);
-    _registerPasswordFocus.addListener(_onFocusChange);
-    _registerConfirmPasswordFocus.addListener(_onFocusChange);
-    _forgotEmailFocus.addListener(_onFocusChange);
-  }
-
-  void _onFocusChange() {
-    setState(() {});
+    // Rebuild when focus changes to update active borders
+    _usernameFocus.addListener(() => setState(() {}));
+    _emailFocus.addListener(() => setState(() {}));
+    _signUpUsernameFocus.addListener(() => setState(() {}));
+    _passwordFocus.addListener(() => setState(() {}));
+    _confirmPasswordFocus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    // Clean up controllers
-    _loginEmailController.dispose();
-    _loginPasswordController.dispose();
-    _registerEmailController.dispose();
-    _registerUsernameController.dispose();
-    _registerPasswordController.dispose();
-    _registerConfirmPasswordController.dispose();
-    _forgotEmailController.dispose();
-
-    // Clean up focus nodes
-    _loginEmailFocus.removeListener(_onFocusChange);
-    _loginPasswordFocus.removeListener(_onFocusChange);
-    _registerEmailFocus.removeListener(_onFocusChange);
-    _registerUsernameFocus.removeListener(_onFocusChange);
-    _registerPasswordFocus.removeListener(_onFocusChange);
-    _registerConfirmPasswordFocus.removeListener(_onFocusChange);
-    _forgotEmailFocus.removeListener(_onFocusChange);
-
-    _loginEmailFocus.dispose();
-    _loginPasswordFocus.dispose();
-    _registerEmailFocus.dispose();
-    _registerUsernameFocus.dispose();
-    _registerPasswordFocus.dispose();
-    _registerConfirmPasswordFocus.dispose();
-    _forgotEmailFocus.dispose();
-
-    _resendTimer?.cancel();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _signUpUsernameController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _usernameFocus.dispose();
+    _emailFocus.dispose();
+    _signUpUsernameFocus.dispose();
+    _passwordFocus.dispose();
+    _confirmPasswordFocus.dispose();
     super.dispose();
   }
 
-  void _startResendTimer() {
-    _resendTimer?.cancel();
+  void _showSnackBar(String message, {bool isError = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.nunito(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: isError ? AppColors.googleRed : AppColors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Future<void> _handleSignIn() async {
+    final email = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty) {
+      _showSnackBar("Please enter your email address.");
+      return;
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar("Please enter a valid email address.");
+      return;
+    }
+    if (password.isEmpty) {
+      _showSnackBar("Please enter your password.");
+      return;
+    }
+
     setState(() {
-      _secondsRemaining = 60;
-      _canResend = false;
+      _isLoading = true;
     });
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsRemaining > 0) {
-        setState(() {
-          _secondsRemaining--;
-        });
-      } else {
-        setState(() {
-          _canResend = true;
-        });
-        _resendTimer?.cancel();
+
+    try {
+      await AuthService().signIn(email: email, password: password);
+      if (mounted) {
+        _showSnackBar("Logged in successfully!", isError: false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
       }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = "Login failed. Please try again.";
+      if (e.code == 'user-not-found') {
+        errorMessage = "No user found with this email.";
+      } else if (e.code == 'wrong-password') {
+        errorMessage = "Wrong password provided.";
+      } else if (e.code == 'invalid-email') {
+        errorMessage = "The email address is badly formatted.";
+      } else if (e.code == 'user-disabled') {
+        errorMessage = "This user account has been disabled.";
+      } else if (e.code == 'invalid-credential') {
+        errorMessage = "Invalid login credentials.";
+      } else {
+        errorMessage = e.message ?? errorMessage;
+      }
+      if (mounted) {
+        _showSnackBar(errorMessage);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar("An unexpected error occurred: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleSignUp() async {
+    final username = _signUpUsernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (email.isEmpty) {
+      _showSnackBar("Please enter your email address.");
+      return;
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar("Please enter a valid email address.");
+      return;
+    }
+    if (username.isEmpty) {
+      _showSnackBar("Please enter a username.");
+      return;
+    }
+    if (password.isEmpty) {
+      _showSnackBar("Please create a password.");
+      return;
+    }
+    if (password.length < 6) {
+      _showSnackBar("Password must be at least 6 characters long.");
+      return;
+    }
+    if (password != confirmPassword) {
+      _showSnackBar("Passwords do not match.");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
     });
+
+    try {
+      await AuthService().signUp(
+        email: email,
+        password: password,
+        fullName: username,
+      );
+      if (mounted) {
+        _showSnackBar("Verification email sent!", isError: false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => EmailVerificationScreen(email: email),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = "Registration failed. Please try again.";
+      if (e.code == 'email-already-in-use') {
+        errorMessage = "The email is already registered.";
+      } else if (e.code == 'invalid-email') {
+        errorMessage = "The email address is invalid.";
+      } else if (e.code == 'weak-password') {
+        errorMessage = "The password provided is too weak.";
+      } else {
+        errorMessage = e.message ?? errorMessage;
+      }
+      if (mounted) {
+        _showSnackBar(errorMessage);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar("An unexpected error occurred: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -127,70 +223,103 @@ class _LoginScreenState extends State<LoginScreen> {
     
     return Scaffold(
       backgroundColor: AppColors.skyBlue,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Top Header Area (Sky Blue background with mascot and speech bubble)
-            _buildHeader(statusBarHeight),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      // Top Header Area (Sky Blue background with mascot and speech bubble)
+                      _buildHeader(statusBarHeight),
 
-            // Tab Bar Area (Only visible on login and register states)
-            if (_viewState == LoginViewState.login || _viewState == LoginViewState.register)
-              _buildTabs()
-            else
-              const SizedBox(height: 20),
-
-            // Main Card Container (White background to match the mockups)
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(32),
-                  topRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 28),
-                  // Logo
-                  Image.asset(
-                    'assets/images/codu_logo.png',
-                    height: 56,
-                    fit: BoxFit.contain,
+                      // Tab Bar Area
+                      _buildTabs(),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  
-                  // Form Fields & Action Buttons
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: _buildFormContent(),
+                ),
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 28),
+                        // Logo
+                        Image.asset(
+                          'assets/images/codu_logo.png',
+                          height: 56,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Form Fields & Action Buttons
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _isSignIn ? _buildSignInForm() : _buildSignUpForm(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: Center(
+                  child: Card(
+                    color: Colors.white,
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.skyBlue),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "Please wait...",
+                            style: GoogleFonts.nunito(
+                              color: AppColors.textDark,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
-  }
-
-  // Determines which form content to build based on view state
-  Widget _buildFormContent() {
-    switch (_viewState) {
-      case LoginViewState.login:
-        return _buildSignInForm();
-      case LoginViewState.register:
-        return _buildSignUpForm();
-      case LoginViewState.forgotPassword:
-        return _buildForgotPasswordForm();
-      case LoginViewState.checkEmail:
-        return _buildCheckEmailForm();
-      case LoginViewState.verifyEmail:
-        return _buildVerifyEmailForm();
-    }
   }
 
   // Header Area Widget
@@ -198,35 +327,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Decorative Speech Bubble Silhouettes (Lighter sky blue)
-        Positioned(
-          top: statusBarHeight - 10,
-          right: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 110,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          top: statusBarHeight + 35,
-          left: -25,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 90,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        Positioned(
-          bottom: 5,
-          right: 35,
-          child: Icon(
-            Icons.chat_bubble,
-            size: 70,
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-        ),
-        
         // Header Content
         Padding(
           padding: EdgeInsets.only(
@@ -270,27 +370,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Mascot + Speech Bubble Widget with dynamic text based on view state
+  // Mascot + Speech Bubble Widget
   Widget _buildMascotHeader() {
-    String bubbleText = "Welcome Back !";
-    switch (_viewState) {
-      case LoginViewState.login:
-        bubbleText = "Welcome Back !";
-        break;
-      case LoginViewState.forgotPassword:
-        bubbleText = "No Problem !\nLet's Get You Back In !";
-        break;
-      case LoginViewState.checkEmail:
-        bubbleText = "Email Sent !\nCheck Your Inbox !";
-        break;
-      case LoginViewState.register:
-        bubbleText = "Lets Get Started !";
-        break;
-      case LoginViewState.verifyEmail:
-        bubbleText = "Almost Done !\nCheck Your Inbox !";
-        break;
-    }
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -327,13 +408,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Center(
                     child: Text(
-                      bubbleText,
-                      textAlign: TextAlign.center,
+                      _isSignIn ? "Welcome Back !" : "Lets Get Started !",
                       style: GoogleFonts.nunito(
                         color: Colors.black,
                         fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        height: 1.2,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -361,7 +440,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Custom Tabs Widget
   Widget _buildTabs() {
-    final bool isSignIn = _viewState == LoginViewState.login;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
@@ -370,16 +448,16 @@ class _LoginScreenState extends State<LoginScreen> {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                if (!isSignIn) {
+                if (!_isSignIn) {
                   setState(() {
-                    _viewState = LoginViewState.login;
+                    _isSignIn = true;
                   });
                 }
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: isSignIn ? Colors.white : AppColors.tabInactiveBg,
+                  color: _isSignIn ? Colors.white : AppColors.tabInactiveBg,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
@@ -389,7 +467,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Text(
                   "LOG IN",
                   style: GoogleFonts.nunito(
-                    color: isSignIn ? Colors.black : Colors.white.withValues(alpha: 0.8),
+                    color: _isSignIn ? Colors.black : Colors.white.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w900,
                     fontSize: 15,
                     letterSpacing: 0.8,
@@ -403,16 +481,16 @@ class _LoginScreenState extends State<LoginScreen> {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                if (isSignIn) {
+                if (_isSignIn) {
                   setState(() {
-                    _viewState = LoginViewState.register;
+                    _isSignIn = false;
                   });
                 }
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: !isSignIn ? Colors.white : AppColors.tabInactiveBg,
+                  color: !_isSignIn ? Colors.white : AppColors.tabInactiveBg,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
@@ -422,7 +500,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Text(
                   "REGISTER",
                   style: GoogleFonts.nunito(
-                    color: !isSignIn ? Colors.black : Colors.white.withValues(alpha: 0.8),
+                    color: !_isSignIn ? Colors.black : Colors.white.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w900,
                     fontSize: 15,
                     letterSpacing: 0.8,
@@ -442,43 +520,54 @@ class _LoginScreenState extends State<LoginScreen> {
       key: const ValueKey('SignInForm'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildInputField(
-          controller: _loginEmailController,
-          hintText: "Email Address",
-          prefixIcon: Icons.person_outline,
-          focusNode: _loginEmailFocus,
-        ),
-        const SizedBox(height: 16),
-        _buildInputField(
-          controller: _loginPasswordController,
-          hintText: "Password",
-          prefixIcon: Icons.lock_outline,
-          isPassword: true,
-          isPasswordVisible: _isPasswordVisible,
-          focusNode: _loginPasswordFocus,
-          onToggleVisibility: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _viewState = LoginViewState.forgotPassword;
-              });
-            },
-            child: Text(
-              "Forgot Password?",
-              style: GoogleFonts.nunito(
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w900,
-                fontSize: 13,
+        // White input container
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildInputField(
+                controller: _usernameController,
+                hintText: "Email Address",
+                prefixIcon: Icons.person_outline,
+                focusNode: _usernameFocus,
               ),
-            ),
+              const SizedBox(height: 16),
+              _buildInputField(
+                controller: _passwordController,
+                hintText: "Password",
+                prefixIcon: Icons.lock_outline,
+                isPassword: true,
+                isPasswordVisible: _isPasswordVisible,
+                focusNode: _passwordFocus,
+                onToggleVisibility: () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () {
+                    // Action
+                  },
+                  child: Text(
+                    "Forgot Password?",
+                    style: GoogleFonts.nunito(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),
@@ -487,11 +576,7 @@ class _LoginScreenState extends State<LoginScreen> {
           faceColor: AppColors.yellow,
           shadowColor: AppColors.yellowShadow,
           borderRadius: 25,
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          },
+          onPressed: _handleSignIn,
           child: Text(
             "LOG IN",
             style: GoogleFonts.nunito(
@@ -502,7 +587,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         const SizedBox(height: 28),
-        _buildDivider("Login With"),
+        _buildDivider(),
         const SizedBox(height: 24),
         _buildSocialButtons(),
       ],
@@ -515,59 +600,67 @@ class _LoginScreenState extends State<LoginScreen> {
       key: const ValueKey('SignUpForm'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildInputField(
-          controller: _registerEmailController,
-          hintText: "Email Address",
-          prefixIcon: Icons.email_outlined,
-          focusNode: _registerEmailFocus,
-        ),
-        const SizedBox(height: 16),
-        _buildInputField(
-          controller: _registerUsernameController,
-          hintText: "Username",
-          prefixIcon: Icons.person_outline,
-          focusNode: _registerUsernameFocus,
-        ),
-        const SizedBox(height: 16),
-        _buildInputField(
-          controller: _registerPasswordController,
-          hintText: "Password",
-          prefixIcon: Icons.lock_outline,
-          isPassword: true,
-          isPasswordVisible: _isPasswordVisible,
-          focusNode: _registerPasswordFocus,
-          onToggleVisibility: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-        _buildInputField(
-          controller: _registerConfirmPasswordController,
-          hintText: "Confirm Password",
-          prefixIcon: Icons.lock_outline,
-          isPassword: true,
-          isPasswordVisible: _isPasswordVisible,
-          focusNode: _registerConfirmPasswordFocus,
-          onToggleVisibility: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
+        // White input container
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildInputField(
+                controller: _emailController,
+                hintText: "Email Address",
+                prefixIcon: Icons.person_outline,
+                focusNode: _emailFocus,
+              ),
+              const SizedBox(height: 16),
+              _buildInputField(
+                controller: _signUpUsernameController,
+                hintText: "Username",
+                prefixIcon: Icons.person_outline,
+                focusNode: _signUpUsernameFocus,
+              ),
+              const SizedBox(height: 16),
+              _buildInputField(
+                controller: _passwordController,
+                hintText: "Password",
+                prefixIcon: Icons.lock_outline,
+                isPassword: true,
+                isPasswordVisible: _isPasswordVisible,
+                focusNode: _passwordFocus,
+                onToggleVisibility: () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildInputField(
+                controller: _confirmPasswordController,
+                hintText: "Confirm Password",
+                prefixIcon: Icons.lock_outline,
+                isPassword: true,
+                isPasswordVisible: _isConfirmPasswordVisible,
+                focusNode: _confirmPasswordFocus,
+                onToggleVisibility: () {
+                  setState(() {
+                    _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                  });
+                },
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 24),
-        // 3D REGISTER Button (matching yellow from mockup)
+        // 3D REGISTER Button
         Duo3dButton(
           faceColor: AppColors.yellow,
           shadowColor: AppColors.yellowShadow,
           borderRadius: 25,
-          onPressed: () {
-            setState(() {
-              _viewState = LoginViewState.verifyEmail;
-            });
-            _startResendTimer();
-          },
+          onPressed: _handleSignUp,
           child: Text(
             "REGISTER",
             style: GoogleFonts.nunito(
@@ -578,275 +671,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         const SizedBox(height: 28),
-        _buildDivider("Sign Up With"),
+        _buildDivider(),
         const SizedBox(height: 24),
         _buildSocialButtons(),
-      ],
-    );
-  }
-
-  // Forgot Password Form View
-  Widget _buildForgotPasswordForm() {
-    return Column(
-      key: const ValueKey('ForgotPasswordForm'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Text(
-            "Forgot Password",
-            style: GoogleFonts.nunito(
-              color: AppColors.blue,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            "Enter Your Email Address and We'll\nSend You a Link To Reset Your Password",
-            textAlign: TextAlign.center,
-            style: GoogleFonts.nunito(
-              color: AppColors.textDark,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        _buildInputField(
-          controller: _forgotEmailController,
-          hintText: "Email Address",
-          prefixIcon: Icons.email_outlined,
-          focusNode: _forgotEmailFocus,
-        ),
-        const SizedBox(height: 24),
-        Duo3dButton(
-          faceColor: AppColors.yellow,
-          shadowColor: AppColors.yellowShadow,
-          borderRadius: 25,
-          onPressed: () {
-            setState(() {
-              _viewState = LoginViewState.checkEmail;
-            });
-          },
-          child: Text(
-            "SEND LINK",
-            style: GoogleFonts.nunito(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 28),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Remember Password? ",
-              style: GoogleFonts.nunito(
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _viewState = LoginViewState.login;
-                });
-              },
-              child: Text(
-                "Go Back",
-                style: GoogleFonts.nunito(
-                  color: AppColors.blue,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // Check Email / Email Sent View
-  Widget _buildCheckEmailForm() {
-    return Column(
-      key: const ValueKey('CheckEmailForm'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Text(
-            "Check Your Email !",
-            style: GoogleFonts.nunito(
-              color: AppColors.blue,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Center(
-          child: Container(
-            width: 120,
-            height: 120,
-            alignment: Alignment.center,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.mail_rounded,
-                  size: 100,
-                  color: Colors.grey[400],
-                ),
-                Positioned(
-                  bottom: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.green,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 32),
-        Duo3dButton(
-          faceColor: AppColors.yellow,
-          shadowColor: AppColors.yellowShadow,
-          borderRadius: 25,
-          onPressed: () {
-            setState(() {
-              _viewState = LoginViewState.login;
-            });
-          },
-          child: Text(
-            "BACK TO LOGIN",
-            style: GoogleFonts.nunito(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Verify Email / OTP Form View
-  Widget _buildVerifyEmailForm() {
-    final String email = _registerEmailController.text.trim().isNotEmpty
-        ? _registerEmailController.text.trim()
-        : "codu@gmail.com";
-        
-    return Column(
-      key: const ValueKey('VerifyEmailForm'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Text(
-            "Verify Your Email",
-            style: GoogleFonts.nunito(
-              color: AppColors.blue,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: Text(
-            "We've Sent A 6-Digit Code to:",
-            style: GoogleFonts.nunito(
-              color: AppColors.textDark,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Center(
-          child: Text(
-            email,
-            style: GoogleFonts.nunito(
-              color: AppColors.textDark,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        OtpInput(
-          onChanged: (code) {
-            _otpCode = code;
-          },
-        ),
-        const SizedBox(height: 24),
-        Center(
-          child: _canResend
-              ? GestureDetector(
-                  onTap: _startResendTimer,
-                  child: Text(
-                    "Resend Code",
-                    style: GoogleFonts.nunito(
-                      color: AppColors.blue,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                )
-              : RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.nunito(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                    children: [
-                      const TextSpan(text: "Didn't Receive Email? Resend in "),
-                      TextSpan(
-                        text: "${_secondsRemaining}s",
-                        style: GoogleFonts.nunito(
-                          color: AppColors.blue,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-        const SizedBox(height: 24),
-        Duo3dButton(
-          faceColor: AppColors.yellow,
-          shadowColor: AppColors.yellowShadow,
-          borderRadius: 25,
-          onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          },
-          child: Text(
-            "VERIFY",
-            style: GoogleFonts.nunito(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -884,7 +711,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ? Padding(
                 padding: const EdgeInsets.only(left: 20.0, right: 12.0),
                 child: Icon(
-                  prefixIcon,
+                   prefixIcon,
                   color: AppColors.textGrey,
                   size: 20,
                 ),
@@ -895,18 +722,18 @@ class _LoginScreenState extends State<LoginScreen> {
           minHeight: 20,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(30),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(30),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(30),
           borderSide: const BorderSide(
             color: AppColors.yellow,
-            width: 2.0,
+            width: 1.5,
           ),
         ),
         suffixIcon: isPassword
@@ -925,8 +752,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Divider row
-  Widget _buildDivider(String text) {
+  // Divider row ("Login With" / "Sign Up With")
+  Widget _buildDivider() {
     return Row(
       children: [
         const Expanded(
@@ -938,7 +765,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            text,
+            _isSignIn ? "Login With" : "Sign Up With",
             style: GoogleFonts.nunito(
               color: Colors.black.withValues(alpha: 0.6),
               fontSize: 14,
