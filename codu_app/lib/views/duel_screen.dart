@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/game_models.dart';
 import '../services/user_data_service.dart';
 import '../services/audio_service.dart';
@@ -240,14 +241,26 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
     final name = await UserDataService().getDisplayName();
     final trophies = await UserDataService().getTrophies();
     final avatar = await UserDataService().getAvatarIndex();
+
+    String email = user?.email ?? "student@codu.com";
+    String localUsername = email.split('@')[0];
+
+    String finalDisplayName;
+    if (name != null && name.trim().isNotEmpty) {
+      finalDisplayName = name;
+    } else if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+      finalDisplayName = user.displayName!;
+    } else {
+      finalDisplayName = localUsername;
+    }
+
     if (mounted) {
       setState(() {
-        if (name != null && name.trim().isNotEmpty) {
-          _displayName = name;
-        }
+        _displayName = finalDisplayName;
         _trophies = trophies;
         _avatarIndex = avatar;
       });

@@ -16,7 +16,7 @@ class AudioService {
   AudioPlayer? _musicPlayer;
   String? _currentMusicAsset;
 
-  // Dedicated Preloaded SFX Players
+  // Dedicated Preloaded SFX Players (Using Low Latency Mode)
   AudioPlayer? _correctPlayer;
   AudioPlayer? _wrongPlayer;
   AudioPlayer? _completedPlayer;
@@ -40,13 +40,21 @@ class AudioService {
     _musicVolume = prefs.getDouble(_keyMusicVolume) ?? 0.8;
     _sfxVolume = prefs.getDouble(_keySfxVolume) ?? 1.0;
 
-    // Instantiate all players
+    // Instantiate players
     _musicPlayer = AudioPlayer();
     _correctPlayer = AudioPlayer();
     _wrongPlayer = AudioPlayer();
     _completedPlayer = AudioPlayer();
     _completedLosePlayer = AudioPlayer();
     _timeRunningOutPlayer = AudioPlayer();
+
+    // Set player modes
+    await _musicPlayer!.setPlayerMode(PlayerMode.mediaPlayer);
+    await _correctPlayer!.setPlayerMode(PlayerMode.lowLatency);
+    await _wrongPlayer!.setPlayerMode(PlayerMode.lowLatency);
+    await _completedPlayer!.setPlayerMode(PlayerMode.lowLatency);
+    await _completedLosePlayer!.setPlayerMode(PlayerMode.lowLatency);
+    await _timeRunningOutPlayer!.setPlayerMode(PlayerMode.lowLatency);
 
     // Configure the background music player context (gain focus, playback category)
     try {
@@ -77,7 +85,7 @@ class AudioService {
       ),
       iOS: AudioContextIOS(
         category: AVAudioSessionCategory.ambient,
-        options: {AVAudioSessionOptions.mixWithOthers},
+        options: const {},
       ),
     );
 
@@ -93,7 +101,7 @@ class AudioService {
     try {
       await Future.wait(preloads);
       // ignore: avoid_print
-      print("AudioService: Successfully preloaded all sound effects.");
+      print("AudioService: Successfully preloaded all sound effects in low-latency mode.");
     } catch (e) {
       // ignore: avoid_print
       print("AudioService Error: Failed during preloading audio assets: $e");
@@ -203,10 +211,8 @@ class AudioService {
 
     if (player != null) {
       try {
-        // Seek to beginning and resume for near-instant latency
-        await player.stop();
-        await player.seek(Duration.zero);
-        await player.resume();
+        // Play directly - this handles resetting and playing for low latency player
+        await player.play(AssetSource(assetPath));
         // ignore: avoid_print
         print("AudioService: Instantly playing preloaded SFX: $assetPath");
       } catch (e) {
@@ -233,9 +239,7 @@ class AudioService {
   Future<void> playTimeRunningOut() async {
     if (_timeRunningOutPlayer != null) {
       try {
-        await _timeRunningOutPlayer!.stop();
-        await _timeRunningOutPlayer!.seek(Duration.zero);
-        await _timeRunningOutPlayer!.resume();
+        await _timeRunningOutPlayer!.play(AssetSource('Audio/TimeRunningOut.mp3'));
         // ignore: avoid_print
         print("AudioService: Instantly playing TimeRunningOut ticking warning");
       } catch (e, stack) {
