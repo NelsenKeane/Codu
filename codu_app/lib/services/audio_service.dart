@@ -33,6 +33,26 @@ class AudioService {
     _masterVolume = prefs.getDouble(_keyMasterVolume) ?? 1.0;
     _musicVolume = prefs.getDouble(_keyMusicVolume) ?? 0.8;
     _sfxVolume = prefs.getDouble(_keySfxVolume) ?? 1.0;
+
+    // Set global audio context to allow mixing sound effects with background music
+    try {
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          android: AudioContextAndroid(
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.ambient,
+            options: {AVAudioSessionOptions.mixWithOthers},
+          ),
+        ),
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print("AudioService: Failed to set global audio context: $e");
+    }
   }
 
   /// Update Master Volume

@@ -222,7 +222,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     _radarController.dispose();
     _slideController.dispose();
     _confettiController.dispose();
-    AudioService().stopMusic();
+    if (_currentState == DuelState.gameplay) {
+      AudioService().stopMusic();
+    }
     AudioService().stopTimeRunningOut();
     super.dispose();
   }
