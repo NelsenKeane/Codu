@@ -159,7 +159,7 @@ class _MainScreenState extends State<MainScreen> {
                             await UserDataService().saveStreak(newStreak);
                             _loadUserData();
                           }
-                          if (mounted) Navigator.of(context).pop();
+                          if (context.mounted) Navigator.of(context).pop();
                         },
                         child: Text(
                           "Save",
@@ -323,6 +323,17 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingData) {
+      return const Scaffold(
+        backgroundColor: AppColors.skyBlue,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
+
     final double statusBarHeight = MediaQuery.of(context).padding.top;
 
     Widget bodyContent;
@@ -377,52 +388,15 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
-
   // Header Area Widget
   Widget _buildHeader(double statusBarHeight) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Header Content
-        Padding(
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 16,
-            left: 20,
-            right: 20,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Code icon </> in the top-left
-              _buildCodeLogo(),
-              const SizedBox(height: 8),
-              // Mascot and Speech Bubble
-              _buildMascotHeader(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Code Icon Logo Widget
-  Widget _buildCodeLogo() {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.06),
-        shape: BoxShape.circle,
+    return Padding(
+      padding: EdgeInsets.only(
+        top: statusBarHeight + 10,
+        left: 20,
+        right: 20,
       ),
-      alignment: Alignment.center,
-      child: Text(
-        "</>",
-        style: GoogleFonts.nunito(
-          color: const Color(0xFF1D83B5).withValues(alpha: 0.6),
-          fontWeight: FontWeight.w900,
-          fontSize: 18,
-        ),
-      ),
+      child: _buildMascotHeader(),
     );
   }
 
@@ -432,20 +406,23 @@ class _MainScreenState extends State<MainScreen> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Mascot
-        Container(
-          width: 130,
-          height: 130,
-          alignment: Alignment.bottomCenter,
-          child: Image.asset(
-            'assets/images/codu_mascot.png',
-            fit: BoxFit.contain,
+        Transform.translate(
+          offset: const Offset(0, 35),
+          child: Container(
+            width: 175,
+            height: 175,
+            alignment: Alignment.bottomCenter,
+            child: Image.asset(
+              'assets/images/codu_mascot.png',
+              fit: BoxFit.contain,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         // Speech Bubble
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 24.0),
+            padding: const EdgeInsets.only(bottom: 12.0),
             child: Stack(
               clipBehavior: Clip.none,
               children: [

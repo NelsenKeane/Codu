@@ -68,6 +68,7 @@ flutter:
     - assets/images/
     - assets/images/Characters/
     - assets/images/CoduExpression/
+    - assets/images/Badge/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

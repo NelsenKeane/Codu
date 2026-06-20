@@ -368,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             await UserDataService().saveStreak(newStreak);
                             _loadProfileData();
                           }
-                          if (mounted) Navigator.of(context).pop();
+                          if (context.mounted) Navigator.of(context).pop();
                         },
                         child: Text(
                           "Save",
@@ -495,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             await UserDataService().saveTrophies(newTrophies);
                             _loadProfileData();
                           }
-                          if (mounted) Navigator.of(context).pop();
+                          if (context.mounted) Navigator.of(context).pop();
                         },
                         child: Text(
                           "Save",
@@ -626,12 +626,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool isSelected = _avatarIndex == index;
     return GestureDetector(
       onTap: () async {
+        final navigator = Navigator.of(context);
         setState(() {
           _avatarIndex = index;
         });
         await UserDataService().saveAvatarIndex(index);
-        _loadProfileData();
-        Navigator.of(context).pop();
+        await _loadProfileData();
+        navigator.pop();
       },
       child: Container(
         width: 80,
@@ -670,6 +671,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF56CCF2),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
     if (_showSettings) {
       return SettingsView(
         onBack: () => setState(() => _showSettings = false),
@@ -960,13 +971,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 16,
+                                alignment: WrapAlignment.center,
                                 children: [
-                                  BadgeShield(emoji: "🏹", fillColor: const Color(0xFFFFD56B), borderColor: const Color(0xFFE5A93B)),
-                                  BadgeShield(emoji: "🪶", fillColor: const Color(0xFF7A9EFF), borderColor: const Color(0xFF5672E5)),
-                                  BadgeShield(emoji: "🌿", fillColor: const Color(0xFF8CEEAD), borderColor: const Color(0xFF339320)),
-                                  BadgeShield(emoji: "🔑", fillColor: const Color(0xFFBDBDBD), borderColor: const Color(0xFF757575)),
+                                  BadgeShield(emoji: '⭐', fillColor: const Color(0xFFFFD700), borderColor: const Color(0xFFFFA000)),
+                                  BadgeShield(emoji: '🔥', fillColor: const Color(0xFFFF5722), borderColor: const Color(0xFFBF360C)),
+                                  BadgeShield(emoji: '💡', fillColor: const Color(0xFFFFEB3B), borderColor: const Color(0xFFF9A825)),
+                                  BadgeShield(emoji: '🏆', fillColor: const Color(0xFF4CAF50), borderColor: const Color(0xFF1B5E20)),
+                                  BadgeShield(emoji: '🚀', fillColor: const Color(0xFF2196F3), borderColor: const Color(0xFF0D47A1)),
+                                  BadgeShield(emoji: '🎯', fillColor: const Color(0xFFE91E63), borderColor: const Color(0xFF880E4F)),
+                                  BadgeShield(emoji: '💎', fillColor: const Color(0xFF00BCD4), borderColor: const Color(0xFF006064)),
+                                  BadgeShield(emoji: '🦁', fillColor: const Color(0xFFFF9800), borderColor: const Color(0xFFE65100)),
+                                  BadgeShield(emoji: '🧠', fillColor: const Color(0xFF9C27B0), borderColor: const Color(0xFF4A148C)),
                                 ],
                               ),
                             ],
@@ -1003,10 +1021,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Floating background silhouettes for premium look
-  Widget _buildBackgroundDecor(double statusBarHeight) {
-    return const SizedBox.shrink();
-  }
+
+
 }
 
 // ---------------- CUSTOM SHIELD BADGE WIDGET ----------------
