@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
 import '../services/user_data_service.dart';
 import '../services/friend_service.dart';
+import '../widgets/skeleton_loader.dart';
 import 'settings_screen.dart';
 import 'add_friend_screen.dart';
 import 'friend_list_screen.dart';
@@ -262,259 +263,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showStreakDialog() {
-    final TextEditingController controller = TextEditingController(text: _streak.toString());
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Update Streak",
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, anim1, anim2) {
-        return Align(
-          alignment: Alignment.center,
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.85,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 15,
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "Update Streak Count",
-                    style: GoogleFonts.nunito(
-                      color: const Color(0xFF1D83B5),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          if (val > 0) {
-                            controller.text = (val - 1).toString();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.nunito(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1D83B5),
-                          ),
-                          decoration: const InputDecoration(
-                            border: UnderlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          controller.text = (val + 1).toString();
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          "Cancel",
-                          style: GoogleFonts.nunito(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFB020),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
-                        onPressed: () async {
-                          int? newStreak = int.tryParse(controller.text);
-                          if (newStreak != null && newStreak >= 0) {
-                            await UserDataService().saveStreak(newStreak);
-                            _loadProfileData();
-                          }
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                        child: Text(
-                          "Save",
-                          style: GoogleFonts.nunito(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showTrophiesDialog() {
-    final TextEditingController controller = TextEditingController(text: _trophies.toString());
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Update Trophies",
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, anim1, anim2) {
-        return Align(
-          alignment: Alignment.center,
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.85,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 15,
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "Update Trophies Count",
-                    style: GoogleFonts.nunito(
-                      color: const Color(0xFF1D83B5),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          if (val > 0) {
-                            controller.text = (val - 1).toString();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.nunito(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1D83B5),
-                          ),
-                          decoration: const InputDecoration(
-                            border: UnderlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          controller.text = (val + 1).toString();
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          "Cancel",
-                          style: GoogleFonts.nunito(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFB020),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
-                        onPressed: () async {
-                          int? newTrophies = int.tryParse(controller.text);
-                          if (newTrophies != null && newTrophies >= 0) {
-                            await UserDataService().saveTrophies(newTrophies);
-                            _loadProfileData();
-                          }
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                        child: Text(
-                          "Save",
-                          style: GoogleFonts.nunito(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   // List of interactive avatars the user can choose from in the popup
   final List<Map<String, dynamic>> _avatars = [
@@ -669,17 +417,122 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
+  Widget _buildProfileSkeleton() {
+    return Scaffold(
+      backgroundColor: const Color(0xFF56CCF2),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SkeletonLoader(width: 100, height: 28),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(36),
+                    topRight: Radius.circular(36),
+                  ),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SkeletonLoader(
+                      width: 145,
+                      height: 145,
+                      borderRadius: BorderRadius.all(Radius.circular(72.5)),
+                    ),
+                    const SizedBox(height: 16),
+                    const SkeletonLoader(width: 180, height: 24),
+                    const SizedBox(height: 8),
+                    const SkeletonLoader(width: 120, height: 16),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 80,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                SkeletonLoader(width: 40, height: 20),
+                                SkeletonLoader(width: 60, height: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            height: 80,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                SkeletonLoader(width: 40, height: 20),
+                                SkeletonLoader(width: 60, height: 12),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: const SkeletonLoader(width: 100, height: 20),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(4, (index) => const SkeletonLoader(
+                        width: 65,
+                        height: 65,
+                        borderRadius: BorderRadius.all(Radius.circular(16)),
+                      )),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF56CCF2),
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        ),
-      );
+      return _buildProfileSkeleton();
     }
     if (_showSettings) {
       return SettingsView(
@@ -908,60 +761,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: GestureDetector(
-                                      onTap: _showStreakDialog,
-                                      child: Container(
-                                        height: 58,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE8F8E9),
-                                          borderRadius: BorderRadius.circular(18),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        child: Row(
-                                          children: [
-                                            const Text("🔥", style: TextStyle(fontSize: 24)),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              "$_streak days",
-                                              style: GoogleFonts.nunito(
-                                                color: AppColors.textDark,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 14,
-                                              ),
+                                    child: Container(
+                                      height: 58,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8F8E9),
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                                      child: Row(
+                                        children: [
+                                          const Text("🔥", style: TextStyle(fontSize: 24)),
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            "$_streak days",
+                                            style: GoogleFonts.nunito(
+                                              color: AppColors.textDark,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 14,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: GestureDetector(
-                                      onTap: _showTrophiesDialog,
-                                      child: Container(
-                                        height: 58,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF3E8FA),
-                                          borderRadius: BorderRadius.circular(18),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        child: Row(
-                                          children: [
-                                            const Text("🏆", style: TextStyle(fontSize: 24)),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                "$_trophies Trophies",
-                                                style: GoogleFonts.nunito(
-                                                  color: AppColors.textDark,
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 13,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
+                                    child: Container(
+                                      height: 58,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3E8FA),
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                                      child: Row(
+                                        children: [
+                                          const Text("🏆", style: TextStyle(fontSize: 24)),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              "$_trophies Trophies",
+                                              style: GoogleFonts.nunito(
+                                                color: AppColors.textDark,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 13,
                                               ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),

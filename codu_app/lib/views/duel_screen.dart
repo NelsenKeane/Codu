@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/game_models.dart';
 import '../services/user_data_service.dart';
+import '../services/friend_service.dart';
 import '../services/audio_service.dart';
 import '../widgets/duo_3d_button.dart';
 
@@ -34,7 +35,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   // User stats
   String _displayName = "Alex";
-  int _trophies = 150;
+  int _trophies = 0;
   int _avatarIndex = 0;
   int _wins = 12;
   int _losses = 8;
@@ -259,6 +260,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     final name = await UserDataService().getDisplayName();
     final trophies = await UserDataService().getTrophies();
     final avatar = await UserDataService().getAvatarIndex();
+    final wins = await UserDataService().getWins();
+    final losses = await UserDataService().getLosses();
+    final streak = await UserDataService().getStreak();
 
     String email = user?.email ?? "student@codu.com";
     String localUsername = email.split('@')[0];
@@ -277,6 +281,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
         _displayName = finalDisplayName;
         _trophies = trophies;
         _avatarIndex = avatar;
+        _wins = wins;
+        _losses = losses;
+        _streak = streak;
       });
     }
   }
@@ -711,23 +718,54 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     AudioService().stopTimeRunningOut();
 
     int delta = 0;
+    int newWins = _wins;
+    int newLosses = _losses;
+    int newStreak = _streak;
+
     if (_userScore > _opponentScore) {
       delta = 30;
       _confettiController.repeat();
       AudioService().playSfx('Audio/Completed.mp3');
+      newWins = _wins + 1;
+      await UserDataService().saveWins(newWins);
+      
+      int currentStreak = await UserDataService().getStreak();
+      newStreak = currentStreak + 1;
+      await UserDataService().saveStreak(newStreak);
     } else if (_userScore < _opponentScore) {
       delta = -15;
+      _confettiController.stop();
       AudioService().playSfx('Audio/CompletedLose.mp3');
+      newLosses = _losses + 1;
+      await UserDataService().saveLosses(newLosses);
+      
+      int currentStreak = await UserDataService().getStreak();
+      newStreak = currentStreak + 1;
+      await UserDataService().saveStreak(newStreak);
     } else {
       delta = 5;
+      _confettiController.repeat();
       AudioService().playSfx('Audio/Completed.mp3');
+      
+      int currentStreak = await UserDataService().getStreak();
+      newStreak = currentStreak + 1;
+      await UserDataService().saveStreak(newStreak);
     }
 
     int newTrophies = max(0, _trophies + delta);
     await UserDataService().saveTrophies(newTrophies);
 
+    // Sync all updated stats to Firestore
+    await FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync stats to Firestore on end match: $e");
+    });
+
     setState(() {
       _trophyDelta = delta;
+      _wins = newWins;
+      _losses = newLosses;
+      _streak = newStreak;
+      _trophies = newTrophies;
     });
 
     _updateState(DuelState.results);
@@ -838,12 +876,28 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       }
     }
 
+    int newLosses = _losses + 1;
+    await UserDataService().saveLosses(newLosses);
+    
+    int currentStreak = await UserDataService().getStreak();
+    int newStreak = currentStreak + 1;
+    await UserDataService().saveStreak(newStreak);
+
     int newTrophies = max(0, _trophies - 15);
     await UserDataService().saveTrophies(newTrophies);
+
+    // Sync all updated stats to Firestore
+    await FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync stats to Firestore on forfeit: $e");
+    });
+
     setState(() {
       _trophyDelta = -15;
       _userScore = 0;
       _opponentScore = 100;
+      _losses = newLosses;
+      _streak = newStreak;
+      _trophies = newTrophies;
     });
     _updateState(DuelState.results);
   }

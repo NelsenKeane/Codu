@@ -20,6 +20,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedNavIndex = 0;
+  String? _selectedSubjectForLevels;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
@@ -33,6 +34,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+    LevelsScreen.preloadMaps(); // Preload all level maps in the background
     AudioService().playMusic('Audio/Menu Music.mp3');
   }
 
@@ -57,132 +59,6 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _showStreakDialog() {
-    final TextEditingController controller = TextEditingController(text: _streak.toString());
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Update Streak",
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, anim1, anim2) {
-        return Align(
-          alignment: Alignment.center,
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.85,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 15,
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "Update Streak Count",
-                    style: GoogleFonts.nunito(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: AppColors.textGrey),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          if (val > 0) {
-                            controller.text = (val - 1).toString();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.nunito(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textDark,
-                          ),
-                          decoration: const InputDecoration(
-                            border: UnderlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: AppColors.green),
-                        onPressed: () {
-                          int val = int.tryParse(controller.text) ?? 0;
-                          controller.text = (val + 1).toString();
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          "Cancel",
-                          style: GoogleFonts.nunito(
-                            color: AppColors.textGrey,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFB020),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
-                        onPressed: () async {
-                          int? newStreak = int.tryParse(controller.text);
-                          if (newStreak != null && newStreak >= 0) {
-                            await UserDataService().saveStreak(newStreak);
-                            _loadUserData();
-                          }
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                        child: Text(
-                          "Save",
-                          style: GoogleFonts.nunito(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   @override
   void dispose() {
@@ -286,34 +162,21 @@ class _MainScreenState extends State<MainScreen> {
 
     final double statusBarHeight = MediaQuery.of(context).padding.top;
 
-    Widget bodyContent;
-    switch (_selectedNavIndex) {
-      case 0:
-        bodyContent = _buildHomeDashboard(statusBarHeight);
-        break;
-      case 1:
-        bodyContent = const LevelsScreen();
-        break;
-      case 2:
-        bodyContent = DuelScreen(
-          onShowBottomBarChanged: (show) {
-            if (mounted) {
-              setState(() {
-                _showBottomBar = show;
-              });
-            }
-          },
-        );
-        break;
-      case 3:
-        bodyContent = const LeaderboardScreen();
-        break;
-      case 4:
-        bodyContent = const ProfileScreen();
-        break;
-      default:
-        bodyContent = _buildHomeDashboard(statusBarHeight);
-    }
+    final List<Widget> screens = [
+      _buildHomeDashboard(statusBarHeight),
+      LevelsScreen(initialSubject: _selectedSubjectForLevels),
+      DuelScreen(
+        onShowBottomBarChanged: (show) {
+          if (mounted) {
+            setState(() {
+              _showBottomBar = show;
+            });
+          }
+        },
+      ),
+      const LeaderboardScreen(),
+      const ProfileScreen(),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.skyBlue,
@@ -328,7 +191,12 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           // Screen Body Content
-          Positioned.fill(child: bodyContent),
+          Positioned.fill(
+            child: FadeIndexedStack(
+              index: _selectedNavIndex,
+              children: screens,
+            ),
+          ),
 
           // Floating Bottom Navigation Bar
           if (_showBottomBar)
@@ -489,32 +357,29 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(width: 16),
           // Streak counter
-          GestureDetector(
-            onTap: _showStreakDialog,
-            child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3F4D59), // Slate dark color
-                borderRadius: BorderRadius.circular(26),
-              ),
-              child: Row(
-                children: [
-                  const Text(
-                    "🔥",
-                    style: TextStyle(fontSize: 18),
+          Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3F4D59), // Slate dark color
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  "🔥",
+                  style: TextStyle(fontSize: 18),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "$_streak",
+                  style: GoogleFonts.nunito(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    "$_streak",
-                    style: GoogleFonts.nunito(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -579,75 +444,83 @@ class _MainScreenState extends State<MainScreen> {
         itemCount: list.length,
         itemBuilder: (context, index) {
           final subject = list[index];
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(subject['color1'] is int ? subject['color1'] : int.parse(subject['color1'].toString())),
-                  Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())),
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedSubjectForLevels = subject['lang'];
+                _selectedNavIndex = 1;
+              });
+            },
+            child: Container(
+              width: 200,
+              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(subject['color1'] is int ? subject['color1'] : int.parse(subject['color1'].toString())),
+                    Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())).withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildLanguageBadge(subject['lang']),
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        shape: BoxShape.circle,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildLanguageBadge(subject['lang']),
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                        size: 14,
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subject['title'],
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          height: 1.2,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subject['title'],
-                      style: GoogleFonts.nunito(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        height: 1.2,
+                      const SizedBox(height: 4),
+                      Text(
+                        "${subject['lessons']} Lessons",
+                        style: GoogleFonts.nunito(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "${subject['lessons']} Lessons",
-                      style: GoogleFonts.nunito(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -699,88 +572,96 @@ class _MainScreenState extends State<MainScreen> {
     bool isCompleted = item['status'] == 'Completed';
     Color themeColor = isCompleted ? AppColors.green : AppColors.yellow;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row with badge and language icon
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildLanguageBadge(item['lang']),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: themeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  item['status'],
-                  style: GoogleFonts.nunito(
-                    color: themeColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 9,
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedSubjectForLevels = item['lang'];
+          _selectedNavIndex = 1;
+        });
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Row with badge and language icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildLanguageBadge(item['lang']),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: themeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    item['status'],
+                    style: GoogleFonts.nunito(
+                      color: themeColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 9,
+                    ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Title
+            Text(
+              item['title'],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.nunito(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Title
-          Text(
-            item['title'],
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.nunito(
-              color: AppColors.textDark,
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
             ),
-          ),
-          const SizedBox(height: 2),
-          // Subtitle
-          Text(
-            "${item['lessons']} Lessons",
-            style: GoogleFonts.nunito(
-              color: AppColors.textGrey,
-              fontWeight: FontWeight.bold,
-              fontSize: 10,
+            const SizedBox(height: 2),
+            // Subtitle
+            Text(
+              "${item['lessons']} Lessons",
+              style: GoogleFonts.nunito(
+                color: AppColors.textGrey,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Progress text
-          Text(
-            "${item['completed']} of ${item['lessons']} Completed",
-            style: GoogleFonts.nunito(
-              color: AppColors.textGrey,
-              fontWeight: FontWeight.w800,
-              fontSize: 9,
+            const SizedBox(height: 12),
+            // Progress text
+            Text(
+              "${item['completed']} of ${item['lessons']} Completed",
+              style: GoogleFonts.nunito(
+                color: AppColors.textGrey,
+                fontWeight: FontWeight.w800,
+                fontSize: 9,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: item['completed'] / item['lessons'],
-              backgroundColor: const Color(0xFFF0F2F6),
-              valueColor: AlwaysStoppedAnimation<Color>(themeColor),
-              minHeight: 4,
+            const SizedBox(height: 6),
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: item['completed'] / item['lessons'],
+                backgroundColor: const Color(0xFFF0F2F6),
+                valueColor: AlwaysStoppedAnimation<Color>(themeColor),
+                minHeight: 4,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -869,8 +750,26 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Color _getActiveColor(int index) {
+    switch (index) {
+      case 0:
+        return Colors.orange;
+      case 1:
+        return Colors.blue;
+      case 2:
+        return Colors.teal;
+      case 3:
+        return Colors.orangeAccent;
+      case 4:
+        return Colors.purple;
+      default:
+        return Colors.orange;
+    }
+  }
+
   // Floating Bottom Navigation Bar Widget
   Widget _buildBottomNavigationBar() {
+    final activeColor = _getActiveColor(_selectedNavIndex);
     return Container(
       height: 72,
       decoration: BoxDecoration(
@@ -884,16 +783,51 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(0, Icons.home_rounded, Colors.orange),
-          _buildNavItem(1, Icons.menu_book_rounded, Colors.blue),
-          _buildNavItem(2, Icons.sports_esports_rounded, Colors.teal),
-          _buildNavItem(3, Icons.emoji_events_rounded, Colors.orangeAccent),
-          _buildNavItem(4, Icons.person_rounded, Colors.purple),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double totalWidth = constraints.maxWidth;
+          final double horizontalPadding = 16.0;
+          final double availableWidth = totalWidth - (horizontalPadding * 2);
+          final double tabWidth = availableWidth / 5;
+          final double pillHeight = 48.0;
+          final double pillTop = (72.0 - pillHeight) / 2;
+
+          return Stack(
+            children: [
+              // Sliding Active Pill Background
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutBack, // Bouncy/playful curve
+                top: pillTop,
+                left: horizontalPadding + (_selectedNavIndex * tabWidth),
+                width: tabWidth,
+                height: pillHeight,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    color: activeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+              ),
+              // Nav Items Row
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildNavItem(0, Icons.home_rounded, Colors.orange)),
+                      Expanded(child: _buildNavItem(1, Icons.menu_book_rounded, Colors.blue)),
+                      Expanded(child: _buildNavItem(2, Icons.sports_esports_rounded, Colors.teal)),
+                      Expanded(child: _buildNavItem(3, Icons.emoji_events_rounded, Colors.orangeAccent)),
+                      Expanded(child: _buildNavItem(4, Icons.person_rounded, Colors.purple)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -908,19 +842,60 @@ class _MainScreenState extends State<MainScreen> {
         });
         _loadUserData();
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.15) : Colors.transparent,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          icon,
-          color: isSelected ? activeColor : AppColors.textGrey,
-          size: 28,
+      child: Container(
+        alignment: Alignment.center,
+        color: Colors.transparent, // Expand tap target area
+        child: AnimatedScale(
+          scale: isSelected ? 1.25 : 1.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutBack,
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(
+              begin: AppColors.textGrey,
+              end: isSelected ? activeColor : AppColors.textGrey,
+            ),
+            duration: const Duration(milliseconds: 250),
+            builder: (context, color, child) {
+              return Icon(
+                icon,
+                color: color,
+                size: 28,
+              );
+            },
+          ),
         ),
       ),
+    );
+  }
+}
+
+class FadeIndexedStack extends StatelessWidget {
+  final int index;
+  final List<Widget> children;
+  final Duration duration;
+
+  const FadeIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+    this.duration = const Duration(milliseconds: 250),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: List.generate(children.length, (i) {
+        final isSelected = index == i;
+        return IgnorePointer(
+          ignoring: !isSelected,
+          child: AnimatedOpacity(
+            opacity: isSelected ? 1.0 : 0.0,
+            duration: duration,
+            curve: Curves.easeInOut,
+            child: children[i],
+          ),
+        );
+      }),
     );
   }
 }

@@ -34,6 +34,8 @@ class FriendService {
     final streak = await UserDataService().getStreak();
     final trophies = await UserDataService().getTrophies();
     final avatarIndex = await UserDataService().getAvatarIndex();
+    final wins = await UserDataService().getWins();
+    final losses = await UserDataService().getLosses();
 
     await _db.collection('users').doc(uid).set({
       'uid': uid,
@@ -43,6 +45,8 @@ class FriendService {
       'streak': streak,
       'trophies': trophies,
       'avatarIndex': avatarIndex,
+      'wins': wins,
+      'losses': losses,
       'lastActive': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

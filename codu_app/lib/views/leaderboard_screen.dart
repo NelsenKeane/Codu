@@ -1,5 +1,12 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import '../services/user_data_service.dart';
+import '../services/friend_service.dart';
+import '../widgets/skeleton_loader.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -10,31 +17,273 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool _isGlobalSelected = true;
+  bool _isLoading = true;
+  int _userTrophies = 0;
 
-  // Mock Global data
-  final List<Map<String, dynamic>> _globalRankings = [
-    // Top 3 (on podium)
-    {'rank': 1, 'name': 'Kevin', 'score': 2850, 'emoji': '🤓', 'bgColor': Color(0xFFFFD56B)},
-    {'rank': 2, 'name': 'Emma', 'score': 1500, 'emoji': '👧', 'bgColor': Color(0xFF8F93EA)},
-    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '👦', 'bgColor': Color(0xFFFF8B8B)},
-    // Rest of list
-    {'rank': 4, 'name': 'Brandon', 'score': 980, 'emoji': '👨‍💻', 'bgColor': Color(0xFF7A9EFF)},
-    {'rank': 5, 'name': 'Bentley', 'score': 950, 'emoji': '🧒', 'bgColor': Color(0xFF8CEEAD)},
-    {'rank': 6, 'name': 'Sophia', 'score': 920, 'emoji': '👩‍💻', 'bgColor': Color(0xFFFFB5E8)},
-    {'rank': 7, 'name': 'Lucas', 'score': 890, 'emoji': '👦', 'bgColor': Color(0xFFBFFCC6)},
-    {'rank': 8, 'name': 'Olivia', 'score': 850, 'emoji': '👧', 'bgColor': Color(0xFFFFC5A5)},
+  List<Map<String, dynamic>> _globalRankings = [];
+  List<Map<String, dynamic>> _friendsRankings = [];
+
+  final List<Map<String, dynamic>> _avatars = [
+    {'svgPath': 'assets/images/Characters/Female1.svg', 'bgColor': const Color(0xFFFFD56B), 'name': 'Female 1'},
+    {'svgPath': 'assets/images/Characters/Female2.svg', 'bgColor': const Color(0xFF8F93EA), 'name': 'Female 2'},
+    {'svgPath': 'assets/images/Characters/Female3.svg', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Female 3'},
+    {'svgPath': 'assets/images/Characters/Male1.svg', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Male 1'},
+    {'svgPath': 'assets/images/Characters/Male2.svg', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Male 2'},
+    {'svgPath': 'assets/images/Characters/Male3.svg', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Male 3'},
   ];
 
-  // Mock Friends data
-  final List<Map<String, dynamic>> _friendsRankings = [
-    // Top 3 (on podium for friends)
-    {'rank': 1, 'name': 'Emma', 'score': 1500, 'emoji': '👧', 'bgColor': Color(0xFF8F93EA)},
-    {'rank': 2, 'name': 'You', 'score': 1250, 'emoji': '🦖', 'bgColor': Color(0xFF95FF7A), 'isSelf': true},
-    {'rank': 3, 'name': 'Max', 'score': 1000, 'emoji': '👦', 'bgColor': Color(0xFFFF8B8B)},
-    // Rest of list
-    {'rank': 4, 'name': 'Bentley', 'score': 950, 'emoji': '🧒', 'bgColor': Color(0xFF8CEEAD)},
-    {'rank': 5, 'name': 'Sophia', 'score': 920, 'emoji': '👩‍💻', 'bgColor': Color(0xFFFFB5E8)},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _syncAndLoadLeaderboard();
+  }
+
+  Future<void> _syncAndLoadLeaderboard() async {
+    // 1. Sync current user to Firestore
+    await FriendService().syncUserToFirestore().catchError((e) {
+      debugPrint("Failed to sync user on leaderboard: $e");
+    });
+
+    // 2. Load current trophies count
+    final trophies = await UserDataService().getTrophies();
+    if (mounted) {
+      setState(() {
+        _userTrophies = trophies;
+      });
+    }
+
+    // 3. Fetch rankings
+    await _loadRankings();
+  }
+
+  Future<void> _loadRankings() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final globalList = await _fetchGlobalRankings();
+      final friendsList = await _fetchFriendsRankings();
+
+      if (mounted) {
+        setState(() {
+          _globalRankings = globalList;
+          _friendsRankings = friendsList;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading rankings: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchGlobalRankings() async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .orderBy('trophies', descending: true)
+        .limit(50)
+        .get();
+
+    List<Map<String, dynamic>> list = [];
+    int rank = 1;
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final uid = doc.id;
+      list.add({
+        'uid': uid,
+        'rank': rank++,
+        'name': data['displayName'] ?? "Student",
+        'score': data['trophies'] ?? 0,
+        'avatarIndex': data['avatarIndex'] ?? 0,
+        'isSelf': uid == currentUid,
+      });
+    }
+    return list;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchFriendsRankings() async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return [];
+
+    // Get friend UIDs
+    final friendsSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUid)
+        .collection('friends')
+        .get();
+
+    List<String> friendUids = friendsSnap.docs.map((d) => d.id).toList();
+    // Include current user
+    friendUids.add(currentUid);
+
+    List<Map<String, dynamic>> friendProfiles = [];
+
+    // Fetch user profiles for all UIDs in chunks of 10
+    for (int i = 0; i < friendUids.length; i += 10) {
+      final chunk = friendUids.sublist(i, min(i + 10, friendUids.length));
+      final profilesSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('uid', whereIn: chunk)
+          .get();
+      for (var doc in profilesSnap.docs) {
+        friendProfiles.add(doc.data());
+      }
+    }
+
+    // Sort by trophies descending
+    friendProfiles.sort((a, b) {
+      final int tA = a['trophies'] ?? 0;
+      final int tB = b['trophies'] ?? 0;
+      return tB.compareTo(tA);
+    });
+
+    // Assign ranks
+    List<Map<String, dynamic>> list = [];
+    int rank = 1;
+    for (var profile in friendProfiles) {
+      final uid = profile['uid'];
+      list.add({
+        'uid': uid,
+        'rank': rank++,
+        'name': profile['displayName'] ?? "Student",
+        'score': profile['trophies'] ?? 0,
+        'avatarIndex': profile['avatarIndex'] ?? 0,
+        'isSelf': uid == currentUid,
+      });
+    }
+    return list;
+  }
+
+  Widget _buildLeaderboardSkeleton() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Container(
+            height: 54,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F3F6),
+              borderRadius: BorderRadius.circular(27),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(23),
+                    ),
+                  ),
+                ),
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                children: [
+                  const SkeletonLoader(width: 55, height: 55, borderRadius: BorderRadius.all(Radius.circular(27.5))),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 75,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Column(
+                children: [
+                  const SkeletonLoader(width: 60, height: 60, borderRadius: BorderRadius.all(Radius.circular(30))),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 75,
+                    height: 135,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Column(
+                children: [
+                  const SkeletonLoader(width: 50, height: 50, borderRadius: BorderRadius.all(Radius.circular(25))),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 75,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(height: 1, color: Color(0xFFE5E5E5), thickness: 1),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.builder(
+              itemCount: 4,
+              physics: const NeverScrollableScrollPhysics(),
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade100),
+                  ),
+                  child: Row(
+                    children: [
+                      const SkeletonLoader(width: 25, height: 25, borderRadius: BorderRadius.all(Radius.circular(6))),
+                      const SizedBox(width: 16),
+                      const SkeletonLoader(width: 38, height: 38, borderRadius: BorderRadius.all(Radius.circular(19))),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: const SkeletonLoader(width: 100, height: 16),
+                      ),
+                      const SizedBox(width: 16),
+                      const SkeletonLoader(width: 45, height: 16),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,18 +295,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final List<Map<String, dynamic>> remainingList = rankings.where((r) => r['rank'] > 3).toList();
 
     // Sort podium so order is 2nd (left), 1st (middle), 3rd (right)
-    Map<String, dynamic>? firstPlace = topThree.firstWhere((r) => r['rank'] == 1, orElse: () => topThree[0]);
-    Map<String, dynamic>? secondPlace = topThree.firstWhere((r) => r['rank'] == 2, orElse: () => topThree[1]);
-    Map<String, dynamic>? thirdPlace = topThree.firstWhere((r) => r['rank'] == 3, orElse: () => topThree[2]);
+    Map<String, dynamic> firstPlace = topThree.firstWhere(
+      (r) => r['rank'] == 1,
+      orElse: () => {'rank': 1, 'name': '-', 'score': 0, 'avatarIndex': 0, 'isEmpty': true},
+    );
+    Map<String, dynamic> secondPlace = topThree.firstWhere(
+      (r) => r['rank'] == 2,
+      orElse: () => {'rank': 2, 'name': '-', 'score': 0, 'avatarIndex': 0, 'isEmpty': true},
+    );
+    Map<String, dynamic> thirdPlace = topThree.firstWhere(
+      (r) => r['rank'] == 3,
+      orElse: () => {'rank': 3, 'name': '-', 'score': 0, 'avatarIndex': 0, 'isEmpty': true},
+    );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2), // Matching sky blue background
+      backgroundColor: const Color(0xFF56CCF2),
       body: Stack(
         children: [
-          // 1. Background Silhouettes
           _buildBackgroundDecor(statusBarHeight),
 
-          // 2. Top Header Info (Title + Trophy Score)
           Positioned(
             top: statusBarHeight + 16,
             left: 24,
@@ -78,7 +334,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
           ),
 
-          // 3. Scrollable Content Area (Starts below header)
           Positioned(
             top: statusBarHeight + 84,
             left: 0,
@@ -98,29 +353,47 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   topLeft: Radius.circular(36),
                   topRight: Radius.circular(36),
                 ),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 110), // Padding below for bottom floating nav
-                  children: [
-                    // Tab Selector (Global vs Friends)
-                    _buildTabSelector(),
-                    const SizedBox(height: 24),
+                child: _isLoading
+                    ? _buildLeaderboardSkeleton()
+                    : RefreshIndicator(
+                        onRefresh: _syncAndLoadLeaderboard,
+                        color: const Color(0xFF8F93EA),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
+                          children: [
+                            _buildTabSelector(),
+                            const SizedBox(height: 24),
 
-                    // Podium Area (Top 3)
-                    _buildPodium(secondPlace, firstPlace, thirdPlace),
-                    const SizedBox(height: 24),
+                            _buildPodium(secondPlace, firstPlace, thirdPlace),
+                            const SizedBox(height: 24),
 
-                    // Ranking List Divider / Line
-                    const Divider(
-                      height: 1,
-                      color: Color(0xFFE5E5E5),
-                      thickness: 1,
-                    ),
-                    const SizedBox(height: 16),
+                            const Divider(
+                              height: 1,
+                              color: Color(0xFFE5E5E5),
+                              thickness: 1,
+                            ),
+                            const SizedBox(height: 16),
 
-                    // Scrollable rankings list (ranks 4+)
-                    ...remainingList.map((player) => _buildPlayerRankCard(player)),
-                  ],
-                ),
+                            if (remainingList.isEmpty) ...[
+                              const SizedBox(height: 24),
+                              Center(
+                                child: Text(
+                                  _isGlobalSelected
+                                      ? "No global players found"
+                                      : "No friends in leaderboard yet",
+                                  style: GoogleFonts.nunito(
+                                    color: const Color(0xFF94A3B8),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ] else
+                              ...remainingList.map((player) => _buildPlayerRankCard(player)),
+                          ],
+                        ),
+                      ),
               ),
             ),
           ),
@@ -129,7 +402,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Floating background silhouettes for premium look
   Widget _buildBackgroundDecor(double statusBarHeight) {
     return Positioned.fill(
       child: Stack(
@@ -157,13 +429,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Dark slate capsule showing Trophy count
   Widget _buildTrophyScoreCapsule() {
     return Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF3F4D59), // Dark slate background
+        color: const Color(0xFF3F4D59),
         borderRadius: BorderRadius.circular(19),
         boxShadow: [
           BoxShadow(
@@ -182,7 +453,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-            "150",
+            "$_userTrophies",
             style: GoogleFonts.nunito(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -194,7 +465,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Dual capsule tab selector: Global vs Friends
   Widget _buildTabSelector() {
     return Container(
       height: 54,
@@ -205,7 +475,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       ),
       child: Row(
         children: [
-          // Global Tab
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -251,7 +520,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
             ),
           ),
-          // Friends Tab
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -302,7 +570,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Winding Podium Row (Emma, Kevin, Max)
   Widget _buildPodium(
     Map<String, dynamic> second,
     Map<String, dynamic> first,
@@ -312,28 +579,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // 2nd Place Column
         _buildPodiumColumn(
           player: second,
-          podiumHeight: 125,
+          podiumHeight: 135,
           columnColor: const Color(0xFF8F93EA),
           badgeBorderColor: const Color(0xFFB0B0B0),
           badgeFillColor: const Color(0xFFCCCCCC),
         ),
         const SizedBox(width: 12),
-        // 1st Place Column
         _buildPodiumColumn(
           player: first,
-          podiumHeight: 165,
+          podiumHeight: 175,
           columnColor: const Color(0xFF8F93EA),
           badgeBorderColor: const Color(0xFFD97E00),
           badgeFillColor: const Color(0xFFFFC043),
         ),
         const SizedBox(width: 12),
-        // 3rd Place Column
         _buildPodiumColumn(
           player: third,
-          podiumHeight: 95,
+          podiumHeight: 110,
           columnColor: const Color(0xFF8F93EA),
           badgeBorderColor: const Color(0xFF8E5A2A),
           badgeFillColor: const Color(0xFFCD7F32),
@@ -342,7 +606,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Individual Podium Column builder
   Widget _buildPodiumColumn({
     required Map<String, dynamic> player,
     required double podiumHeight,
@@ -350,17 +613,41 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     required Color badgeBorderColor,
     required Color badgeFillColor,
   }) {
+    final bool isEmpty = player['isEmpty'] == true;
     final bool isSelf = player['isSelf'] ?? false;
+
+    Color avatarBgColor = const Color(0xFFE2E8F0);
+    Widget avatarChild = const Icon(
+      Icons.person_rounded,
+      color: Color(0xFF94A3B8),
+      size: 38,
+    );
+
+    if (!isEmpty) {
+      final int avatarIndex = player['avatarIndex'] ?? 0;
+      final avatar = _avatars[avatarIndex.clamp(0, 5)];
+      avatarBgColor = avatar['bgColor'];
+      avatarChild = ClipOval(
+        child: Transform.scale(
+          scale: 1.2,
+          child: SvgPicture.asset(
+            avatar['svgPath'],
+            width: 68,
+            height: 68,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Avatar circle with character emoji
         Container(
           width: 68,
           height: 68,
           decoration: BoxDecoration(
-            color: player['bgColor'],
+            color: avatarBgColor,
             shape: BoxShape.circle,
             border: Border.all(
               color: isSelf ? const Color(0xFFFFD56B) : Colors.white,
@@ -375,13 +662,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ],
           ),
           alignment: Alignment.center,
-          child: Text(
-            player['emoji'],
-            style: const TextStyle(fontSize: 38),
-          ),
+          child: avatarChild,
         ),
         const SizedBox(height: 10),
-        // Podium block
         Container(
           width: 90,
           height: podiumHeight,
@@ -402,26 +685,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
-              // Hexagonal rank badge
-              HexagonBadge(
-                text: player['rank'].toString(),
-                fillColor: badgeFillColor,
-                borderColor: badgeBorderColor,
-                size: 32,
-              ),
               const SizedBox(height: 8),
-              // Name text
-              Text(
-                player['name'],
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
+              _buildRankBadge(player['rank'] as int, size: 30),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  player['name'],
+                  style: GoogleFonts.nunito(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(height: 6),
-              // Trophy Score row
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -447,9 +727,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // Row card for ranks 4 and below
   Widget _buildPlayerRankCard(Map<String, dynamic> player) {
     final bool isSelf = player['isSelf'] ?? false;
+    final int avatarIndex = player['avatarIndex'] ?? 0;
+    final avatar = _avatars[avatarIndex.clamp(0, 5)];
+    final Color bgColor = avatar['bgColor'];
+    final String svgPath = avatar['svgPath'];
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -471,21 +754,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       ),
       child: Row(
         children: [
-          // Green Hexagonal Rank Badge
-          HexagonBadge(
-            text: player['rank'].toString(),
-            fillColor: const Color(0xFF8CEEAD),
-            borderColor: const Color(0xFF46B830),
-            size: 30,
-          ),
+          _buildRankBadge(player['rank'] as int, size: 30),
           const SizedBox(width: 16),
 
-          // User Avatar
           Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: player['bgColor'],
+              color: bgColor,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
@@ -496,14 +772,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ],
             ),
             alignment: Alignment.center,
-            child: Text(
-              player['emoji'],
-              style: const TextStyle(fontSize: 24),
+            child: ClipOval(
+              child: Transform.scale(
+                scale: 1.2,
+                child: SvgPicture.asset(
+                  svgPath,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 16),
 
-          // Name
           Expanded(
             child: Text(
               player['name'],
@@ -512,10 +794,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 fontWeight: isSelf ? FontWeight.w900 : FontWeight.w800,
                 fontSize: 16,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
-          // Trophy Score
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -538,84 +820,49 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       ),
     );
   }
-}
 
-// ---------------- CUSTOM HEXAGON BADGE WIDGET ----------------
-
-class HexagonBadge extends StatelessWidget {
-  final String text;
-  final Color fillColor;
-  final Color borderColor;
-  final double size;
-
-  const HexagonBadge({
-    super.key,
-    required this.text,
-    required this.fillColor,
-    required this.borderColor,
-    this.size = 32.0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(size, size * 0.866), // Aspect ratio for point-up hexagon is 1 : sqrt(3)/2
-      painter: HexagonPainter(fillColor: fillColor, borderColor: borderColor),
-      child: SizedBox(
+  Widget _buildRankBadge(int rank, {double size = 32}) {
+    if (rank == 1) {
+      return SvgPicture.asset(
+        'assets/images/Rank1_Icon.svg',
         width: size,
-        height: size * 0.866,
-        child: Center(
-          child: Text(
-            text,
-            style: GoogleFonts.nunito(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: size * 0.44,
+        height: size * 1.125,
+      );
+    } else if (rank == 2) {
+      return SvgPicture.asset(
+        'assets/images/Rank2_Icon.svg',
+        width: size,
+        height: size * 1.125,
+      );
+    } else if (rank == 3) {
+      return SvgPicture.asset(
+        'assets/images/Rank3_Icon.svg',
+        width: size,
+        height: size * 1.125,
+      );
+    } else {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SvgPicture.asset(
+              'assets/images/Rank4_Icon.svg',
+              width: size,
+              height: size,
             ),
-          ),
+            Text(
+              rank.toString(),
+              style: GoogleFonts.nunito(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.44,
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class HexagonPainter extends CustomPainter {
-  final Color fillColor;
-  final Color borderColor;
-
-  HexagonPainter({required this.fillColor, required this.borderColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.fill;
-
-    final borderPaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
-
-    final path = Path();
-    final double w = size.width;
-    final double h = size.height;
-
-    // Standard point-up hexagon:
-    // Vertices starting at Top Center (w/2, 0) and moving clockwise
-    path.moveTo(w / 2, 0);
-    path.lineTo(w, h * 0.25);
-    path.lineTo(w, h * 0.75);
-    path.lineTo(w / 2, h);
-    path.lineTo(0, h * 0.75);
-    path.lineTo(0, h * 0.25);
-    path.close();
-
-    canvas.drawPath(path, paint);
-    canvas.drawPath(path, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant HexagonPainter oldDelegate) {
-    return oldDelegate.fillColor != fillColor || oldDelegate.borderColor != borderColor;
+      );
+    }
   }
 }

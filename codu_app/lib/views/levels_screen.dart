@@ -6,11 +6,154 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:path_drawing/path_drawing.dart';
 import '../services/user_data_service.dart';
+import '../widgets/skeleton_loader.dart';
 import 'gameplay_screen.dart';
+
+class CachedSvgMapData {
+  final String svgContent;
+  final PathMetric pathMetric;
+  CachedSvgMapData({required this.svgContent, required this.pathMetric});
+}
 
 class LevelsScreen extends StatefulWidget {
   final String? initialSubject;
   const LevelsScreen({super.key, this.initialSubject});
+
+  // Public static cache map
+  static final Map<String, CachedSvgMapData> svgCache = {};
+  static final Map<String, int> completedCache = {};
+  static final Map<String, Map<int, int>> starsCache = {};
+
+  static Future<void> preloadMaps() async {
+    final subjects = ['Phyton', 'C++', 'Javascript', 'Java'];
+    for (var subject in subjects) {
+      String svgPath = '';
+      switch (subject) {
+        case 'Phyton':
+          svgPath = 'assets/images/Level Map 1.svg';
+          break;
+        case 'C++':
+          svgPath = 'assets/images/Level Map 2.svg';
+          break;
+        case 'Javascript':
+          svgPath = 'assets/images/Level Map 3.svg';
+          break;
+        case 'Java':
+          svgPath = 'assets/images/Level Map 4.svg';
+          break;
+      }
+
+      if (svgCache.containsKey(svgPath)) continue;
+
+      try {
+        String svgString = await rootBundle.loadString(svgPath);
+
+        // Extend starting point
+        final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
+        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
+          final double x = double.parse(match.group(1)!);
+          final double vDistance = double.parse(match.group(2)!);
+          final double newVDistance = vDistance + 400.0;
+          return 'd="M$x,11400v-$newVDistance';
+        });
+
+        // Curvy extension
+        double xStart = 613.94;
+        if (svgPath.contains('Map 2')) {
+          xStart = 770.0;
+        } else if (svgPath.contains('Map 3') || svgPath.contains('Map 4')) {
+          xStart = 600.0;
+        }
+
+        StringBuffer sb = StringBuffer();
+        double currentY = 0;
+        double w1 = xStart - 211.81;
+        double hSegment1 = w1 - 307.92;
+        sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+        currentY -= 407.92;
+
+        bool goRight = true;
+        while (currentY > -5000) {
+          if (goRight) {
+            sb.write('v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50');
+          } else {
+            sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+          }
+          currentY -= 407.92;
+          goRight = !goRight;
+        }
+        final String curvyExtension = '${sb.toString()}"';
+        modifiedSvgPath = modifiedSvgPath.replaceFirst('V0"', curvyExtension);
+
+        PathMetric? pathMetric;
+        RegExp regExp = RegExp(r'\bd="([^"]+)"');
+        var match = regExp.firstMatch(modifiedSvgPath);
+        if (match != null) {
+          String pathData = match.group(1)!;
+          Path path = parseSvgPathData(pathData);
+          var metrics = path.computeMetrics().toList();
+          if (metrics.isNotEmpty) {
+            pathMetric = metrics.first;
+          }
+        }
+
+        // Remove style block
+        final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
+        String cleanedSvg = svgString.replaceAll(styleRegex, '');
+
+        cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
+
+        cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
+          final double x = double.parse(match.group(1)!);
+          final double vDistance = double.parse(match.group(2)!);
+          final double newVDistance = vDistance + 400.0;
+          return 'd="M$x,11400v-$newVDistance';
+        });
+
+        cleanedSvg = cleanedSvg.replaceFirst('V0"', curvyExtension);
+
+        cleanedSvg = cleanedSvg.replaceFirst(
+          '<use transform="scale(.71)" xlink:href="#image"/>',
+          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
+        );
+
+        cleanedSvg = cleanedSvg.replaceFirst(
+          '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
+          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
+        );
+
+        String svgContent = cleanedSvg
+            .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
+            .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
+
+        if (pathMetric != null) {
+          svgCache[svgPath] = CachedSvgMapData(
+            svgContent: svgContent,
+            pathMetric: pathMetric,
+          );
+        }
+      } catch (e) {
+        debugPrint("Error preloading SVG path for $subject: $e");
+      }
+    }
+
+    // Preload user progress for all subjects into static cache
+    try {
+      final history = await UserDataService().getHistory();
+      for (var h in history) {
+        final lang = h['lang'] as String;
+        final completed = h['completed'] as int? ?? 0;
+        completedCache[lang] = completed;
+      }
+      for (var subject in subjects) {
+        final dbSubject = subject == 'Phyton' ? 'Python' : subject;
+        final starsMap = await UserDataService().getLevelStars(dbSubject);
+        starsCache[dbSubject] = starsMap;
+      }
+    } catch (e) {
+      debugPrint("Error preloading user progress for levels: $e");
+    }
+  }
 
   @override
   State<LevelsScreen> createState() => _LevelsScreenState();
@@ -73,7 +216,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _loadUserData({bool forceReload = false}) async {
     final streak = await UserDataService().getStreak();
     final trophies = await UserDataService().getTrophies();
     if (mounted) {
@@ -81,7 +224,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         _streak = streak;
         _trophies = trophies;
       });
-      await _loadSvgPath();
+      await _loadSvgPath(forceReload: forceReload);
     }
   }
 
@@ -100,95 +243,151 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     }
   }
 
-  Future<void> _loadSvgPath() async {
-    setState(() {
-      _isLoading = true;
-    });
+  void _scrollToBottomAndAnimate() {
+    if (!mounted) return;
+    if (_scrollController.hasClients) {
+      double scale = MediaQuery.of(context).size.width / 1080.0;
+      double canvasHeight = 16400.0 * scale;
+      double maxScroll = canvasHeight - MediaQuery.of(context).size.height;
+      if (maxScroll > 0) {
+        _scrollController.jumpTo(maxScroll);
+      }
+    }
+    _startAnimation();
+  }
+
+  Future<void> _loadSvgPath({bool forceReload = false}) async {
+    final dbSubject = _selectedSubject == 'Phyton' ? 'Python' : _selectedSubject;
+    String svgPath = _getSvgPath();
+
+    // Check synchronous cache path first
+    if (!forceReload &&
+        LevelsScreen.svgCache.containsKey(svgPath) &&
+        LevelsScreen.completedCache.containsKey(dbSubject) &&
+        LevelsScreen.starsCache.containsKey(dbSubject)) {
+      
+      final cached = LevelsScreen.svgCache[svgPath]!;
+      final completed = LevelsScreen.completedCache[dbSubject]!;
+      final starsMap = LevelsScreen.starsCache[dbSubject]!;
+
+      _svgContent = cached.svgContent;
+      _pathMetric = cached.pathMetric;
+      _levelStarsMap = starsMap;
+      _activeLevelIndex = completed.clamp(0, 44);
+      _isLoading = false;
+
+      // Jump and animate after rendering
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottomAndAnimate();
+      });
+      return;
+    }
+
+    // Only show skeleton loader if we don't have SVG content yet
+    if (_svgContent.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
-      final dbSubject = _selectedSubject == 'Phyton' ? 'Python' : _selectedSubject;
       final history = await UserDataService().getHistory();
+      for (var h in history) {
+        final lang = h['lang'] as String;
+        final completed = h['completed'] as int? ?? 0;
+        LevelsScreen.completedCache[lang] = completed;
+      }
+
+      final starsMap = await UserDataService().getLevelStars(dbSubject);
+      LevelsScreen.starsCache[dbSubject] = starsMap;
+
       final subjectProgress = history.firstWhere(
         (h) => h['lang'] == dbSubject,
         orElse: () => <String, dynamic>{},
       );
 
-      final starsMap = await UserDataService().getLevelStars(dbSubject);
-
       int completed = 0;
-      int total = 10;
       if (subjectProgress.isNotEmpty) {
         completed = subjectProgress['completed'] ?? 0;
-        total = subjectProgress['lessons'] ?? 10;
       }
-      if (total == 0) total = 10;
       
       setState(() {
         _levelStarsMap = starsMap;
         _activeLevelIndex = completed.clamp(0, 44);
       });
 
-      String svgPath = _getSvgPath();
-      String svgString = await rootBundle.loadString(svgPath);
+      // Check cache again for SVG
+      if (LevelsScreen.svgCache.containsKey(svgPath)) {
+        final cached = LevelsScreen.svgCache[svgPath]!;
+        _svgContent = cached.svgContent;
+        _pathMetric = cached.pathMetric;
+      } else {
+        String svgString = await rootBundle.loadString(svgPath);
 
-      // Extend the starting point at the bottom from 11000 to 11400
-      final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
-      String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
-        final double x = double.parse(match.group(1)!);
-        final double vDistance = double.parse(match.group(2)!);
-        final double newVDistance = vDistance + 400.0;
-        return 'd="M$x,11400v-$newVDistance';
-      });
+        // Extend starting point
+        final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
+        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
+          final double x = double.parse(match.group(1)!);
+          final double vDistance = double.parse(match.group(2)!);
+          final double newVDistance = vDistance + 400.0;
+          return 'd="M$x,11400v-$newVDistance';
+        });
 
-      // Extend the ending point at the top from V0 to a beautiful curvy extension
-      final String curvyExtension = _generateCurvyExtension(svgPath: svgPath);
-      modifiedSvgPath = modifiedSvgPath.replaceFirst('V0"', curvyExtension);
+        // Curvy extension
+        final String curvyExtension = _generateCurvyExtension(svgPath: svgPath);
+        modifiedSvgPath = modifiedSvgPath.replaceFirst('V0"', curvyExtension);
 
-      RegExp regExp = RegExp(r'\bd="([^"]+)"');
-      var match = regExp.firstMatch(modifiedSvgPath);
-      if (match != null) {
-        String pathData = match.group(1)!;
-        Path path = parseSvgPathData(pathData);
-        var metrics = path.computeMetrics().toList();
-        if (metrics.isNotEmpty) {
-          _pathMetric = metrics.first;
+        PathMetric? pathMetric;
+        RegExp regExp = RegExp(r'\bd="([^"]+)"');
+        var match = regExp.firstMatch(modifiedSvgPath);
+        if (match != null) {
+          String pathData = match.group(1)!;
+          Path path = parseSvgPathData(pathData);
+          var metrics = path.computeMetrics().toList();
+          if (metrics.isNotEmpty) {
+            pathMetric = metrics.first;
+          }
+        }
+
+        // Remove style block
+        final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
+        String cleanedSvg = svgString.replaceAll(styleRegex, '');
+
+        cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
+
+        cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
+          final double x = double.parse(match.group(1)!);
+          final double vDistance = double.parse(match.group(2)!);
+          final double newVDistance = vDistance + 400.0;
+          return 'd="M$x,11400v-$newVDistance';
+        });
+
+        cleanedSvg = cleanedSvg.replaceFirst('V0"', curvyExtension);
+
+        cleanedSvg = cleanedSvg.replaceFirst(
+          '<use transform="scale(.71)" xlink:href="#image"/>',
+          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
+        );
+
+        cleanedSvg = cleanedSvg.replaceFirst(
+          '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
+          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
+        );
+
+        _svgContent = cleanedSvg
+            .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
+            .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
+
+        _pathMetric = pathMetric;
+
+        // Save to cache
+        if (_pathMetric != null) {
+          LevelsScreen.svgCache[svgPath] = CachedSvgMapData(
+            svgContent: _svgContent,
+            pathMetric: _pathMetric!,
+          );
         }
       }
-
-      // Remove the <style>...</style> block to prevent class parsing conflicts in flutter_svg
-      final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
-      String cleanedSvg = svgString.replaceAll(styleRegex, '');
-
-      // Adjust the viewBox to start at y = -5000 and have height = 16400
-      cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
-
-      // Extend the path starting point from 11000 to 11400 in the SVG content
-      cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
-        final double x = double.parse(match.group(1)!);
-        final double vDistance = double.parse(match.group(2)!);
-        final double newVDistance = vDistance + 400.0;
-        return 'd="M$x,11400v-$newVDistance';
-      });
-
-      // Extend the ending point at the top from V0 to a beautiful curvy extension
-      cleanedSvg = cleanedSvg.replaceFirst('V0"', curvyExtension);
-
-      // Tile background image at the top to cover the y = -5000 to 0 area
-      cleanedSvg = cleanedSvg.replaceFirst(
-        '<use transform="scale(.71)" xlink:href="#image"/>',
-        '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
-      );
-
-      // Tile background image and shift bottom transition image
-      cleanedSvg = cleanedSvg.replaceFirst(
-        '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
-        '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
-      );
-
-      // Inline the styles directly onto the elements referencing st0 and st1
-      _svgContent = cleanedSvg
-          .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
-          .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
     } catch (e) {
       debugPrint("Error loading or parsing SVG path: $e");
     } finally {
@@ -197,20 +396,34 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
           _isLoading = false;
         });
 
-        // Jump to bottom before animating to the active level so the map starts at the bottom
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            double scale = MediaQuery.of(context).size.width / 1080.0;
-            double canvasHeight = 16400.0 * scale;
-            double maxScroll = canvasHeight - MediaQuery.of(context).size.height;
-            if (maxScroll > 0) {
-              _scrollController.jumpTo(maxScroll);
-            }
-          }
-          _startAnimation();
+          _scrollToBottomAndAnimate();
         });
       }
     }
+  }
+
+  Widget _buildLevelsMapSkeleton() {
+    return Container(
+      color: const Color(0xFF56CCF2),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(6, (index) {
+            final double alignX = index % 2 == 0 ? -0.5 : 0.5;
+            return Align(
+              alignment: Alignment(alignX, 0),
+              child: const SkeletonLoader(
+                width: 50,
+                height: 50,
+                borderRadius: BorderRadius.all(Radius.circular(25)),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   void _updatePathPositions(double screenWidth) {
@@ -615,11 +828,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
           // 2. Scrollable Level Map
           Positioned.fill(
             child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
+                ? _buildLevelsMapSkeleton()
                 : NotificationListener<OverscrollIndicatorNotification>(
                     onNotification: (overscroll) {
                       overscroll.disallowIndicator();
@@ -1021,7 +1230,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                   ),
                 ),
               ).then((_) {
-                _loadUserData();
+                _loadUserData(forceReload: true);
               });
             } else {
               ScaffoldMessenger.of(context).showSnackBar(

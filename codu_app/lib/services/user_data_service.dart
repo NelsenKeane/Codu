@@ -300,7 +300,7 @@ class UserDataService {
     final uid = _uid;
     if (uid == null) return 0;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('trophies_$uid') ?? 150; // Default to 150
+    return prefs.getInt('trophies_$uid') ?? 0; // Default to 0
   }
 
   // Save Trophies / Stars
@@ -309,6 +309,38 @@ class UserDataService {
     if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('trophies_$uid', trophies);
+  }
+
+  // Load Wins
+  Future<int> getWins() async {
+    final uid = _uid;
+    if (uid == null) return 0;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('wins_$uid') ?? 0;
+  }
+
+  // Save Wins
+  Future<void> saveWins(int wins) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('wins_$uid', wins);
+  }
+
+  // Load Losses
+  Future<int> getLosses() async {
+    final uid = _uid;
+    if (uid == null) return 0;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('losses_$uid') ?? 0;
+  }
+
+  // Save Losses
+  Future<void> saveLosses(int losses) async {
+    final uid = _uid;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('losses_$uid', losses);
   }
 
   // Load Avatar Index
