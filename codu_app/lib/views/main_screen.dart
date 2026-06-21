@@ -173,6 +173,13 @@ class _MainScreenState extends State<MainScreen> {
             });
           }
         },
+        onBack: () {
+          if (mounted) {
+            setState(() {
+              _selectedNavIndex = 0;
+            });
+          }
+        },
       ),
       const LeaderboardScreen(),
       const ProfileScreen(),
@@ -182,14 +189,13 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: AppColors.skyBlue,
       body: Stack(
         children: [
-          // SVG background for tabs that don't have their own (home, explore, leaderboard)
-          if (_selectedNavIndex != 1 && _selectedNavIndex != 2 && _selectedNavIndex != 4)
-            Positioned.fill(
-              child: SvgPicture.asset(
-                'assets/images/codu_background_pattern_mobile_soft.svg',
-                fit: BoxFit.cover,
-              ),
+          // Root background pattern remains permanently in the tree to prevent asset loading/parsing jank during transitions
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
             ),
+          ),
           // Screen Body Content
           Positioned.fill(
             child: FadeIndexedStack(

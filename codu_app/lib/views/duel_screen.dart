@@ -21,7 +21,8 @@ enum DuelState {
 
 class DuelScreen extends StatefulWidget {
   final Function(bool showBottomBar)? onShowBottomBarChanged;
-  const DuelScreen({super.key, this.onShowBottomBarChanged});
+  final VoidCallback? onBack;
+  const DuelScreen({super.key, this.onShowBottomBarChanged, this.onBack});
 
   @override
   State<DuelScreen> createState() => _DuelScreenState();
@@ -85,6 +86,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   int _opponentScore = 0;
   int _userScorePrevious = 0;
   int _opponentScorePrevious = 0;
+  int _matchDurationSeconds = 0;
 
   // Emotes state
   String? _userEmotePath;
@@ -717,6 +719,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     AudioService().stopMusic();
     AudioService().stopTimeRunningOut();
 
+    _matchDurationSeconds = 90 - _roundSecondsLeft;
+
     int delta = 0;
     int newWins = _wins;
     int newLosses = _losses;
@@ -728,28 +732,16 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       AudioService().playSfx('Audio/Completed.mp3');
       newWins = _wins + 1;
       await UserDataService().saveWins(newWins);
-      
-      int currentStreak = await UserDataService().getStreak();
-      newStreak = currentStreak + 1;
-      await UserDataService().saveStreak(newStreak);
     } else if (_userScore < _opponentScore) {
       delta = -15;
       _confettiController.stop();
       AudioService().playSfx('Audio/CompletedLose.mp3');
       newLosses = _losses + 1;
       await UserDataService().saveLosses(newLosses);
-      
-      int currentStreak = await UserDataService().getStreak();
-      newStreak = currentStreak + 1;
-      await UserDataService().saveStreak(newStreak);
     } else {
       delta = 5;
       _confettiController.repeat();
       AudioService().playSfx('Audio/Completed.mp3');
-      
-      int currentStreak = await UserDataService().getStreak();
-      newStreak = currentStreak + 1;
-      await UserDataService().saveStreak(newStreak);
     }
 
     int newTrophies = max(0, _trophies + delta);
@@ -858,6 +850,8 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     AudioService().stopTimeRunningOut();
     AudioService().playSfx('Audio/CompletedLose.mp3');
 
+    _matchDurationSeconds = 90 - _roundSecondsLeft;
+
     if (_duelDocId != null) {
       try {
         if (_isHost) {
@@ -879,10 +873,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     int newLosses = _losses + 1;
     await UserDataService().saveLosses(newLosses);
     
-    int currentStreak = await UserDataService().getStreak();
-    int newStreak = currentStreak + 1;
-    await UserDataService().saveStreak(newStreak);
-
     int newTrophies = max(0, _trophies - 15);
     await UserDataService().saveTrophies(newTrophies);
 
@@ -896,7 +886,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       _userScore = 0;
       _opponentScore = 100;
       _losses = newLosses;
-      _streak = newStreak;
       _trophies = newTrophies;
     });
     _updateState(DuelState.results);
@@ -971,268 +960,265 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   // 1. LOBBY VIEW
   Widget _buildLobbyView() {
+    final double screenWidth = MediaQuery.of(context).size.width;
+
+    final avatarIndex = _avatarIndex;
+    final Map<String, dynamic> avatar = (avatarIndex >= 0 && avatarIndex < _avatars.length)
+        ? _avatars[avatarIndex]
+        : _avatars[0];
+
     return Container(
-      color: const Color(0xFFF0F2F6),
+      color: Colors.transparent, // Background pattern is drawn by the parent MainScreen
       child: Stack(
         children: [
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.2,
-              child: SvgPicture.asset(
-                'assets/images/codu_background_pattern_mobile_soft.svg',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
           SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Column(
-                  children: [
-                    // Visual Controller Header
-                    Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF56CCF2), Color(0xFF2F80ED)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24.0, 16.0, 24.0, 80.0),
+              child: Column(
+                children: [
+                  // 1. Top Row: Back button (on the left) + Trophies capsule (on the right)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Back Button
+                      GestureDetector(
+                        onTap: widget.onBack,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2F80ED).withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
                       ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.sports_esports_rounded,
-                        color: Colors.white,
-                        size: 58,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      "Coding Duel",
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFF1E2A38),
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Solve faster than your opponent to win trophies!",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFF9AAEC4),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Trophies & Stats Box
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text("🏆", style: TextStyle(fontSize: 32)),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "YOUR TROPHIES",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF9AAEC4),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                  Text(
-                                    "$_trophies",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF1E2A38),
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
+                      // Trophies Capsule
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E2A38).withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text("🏆", style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Text(
+                              "$_trophies",
+                              style: GoogleFonts.nunito(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
                               ),
-                            ],
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.0),
-                            child: Divider(color: Color(0xFFE2E8F0)),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _buildStatItem("WINS", "$_wins", Colors.green),
-                              _buildStatItem("LOSSES", "$_losses", Colors.redAccent),
-                              _buildStatItem("STREAK", "🔥 $_streak", Colors.orange),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 28),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
 
-                    // Language Selection Carousel Header
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4.0),
-                        child: Text(
-                          "Choose Subject",
+                  // 2. Title: Match Selection
+                  Text(
+                    "Match Selection",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 3. Centered White User Profile Card
+                  Container(
+                    width: screenWidth * 0.75,
+                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Circle Avatar
+                        Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            color: avatar['bgColor'],
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: ClipOval(
+                            child: Transform.scale(
+                              scale: 1.25,
+                              child: SvgPicture.asset(
+                                avatar['svgPath'],
+                                width: 140,
+                                height: 140,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          _displayName,
                           style: GoogleFonts.nunito(
                             color: const Color(0xFF1E2A38),
-                            fontSize: 18,
+                            fontSize: 22,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+
+                  // 4. Subject Selection Label
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: Text(
+                        "Choose Your Subjects:",
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
 
-                    // Horizontal Language selection carousel
-                    SizedBox(
-                      height: 100,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _languagesList.length,
-                        itemBuilder: (context, index) {
-                          final item = _languagesList[index];
-                          final bool isSelected = _selectedLanguage == item['lang'];
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedLanguage = item['lang'];
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 110,
-                              margin: const EdgeInsets.only(right: 12, bottom: 8, top: 4),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [item['color1'], item['color2']],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                  // 5. Choose Subject carousel (kept identical to current version)
+                  SizedBox(
+                    height: 100,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _languagesList.length,
+                      itemBuilder: (context, index) {
+                        final item = _languagesList[index];
+                        final bool isSelected = _selectedLanguage == item['lang'];
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedLanguage = item['lang'];
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 110,
+                            margin: const EdgeInsets.only(right: 12, bottom: 8, top: 4),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [item['color1'], item['color2']],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: isSelected
+                                  ? Border.all(color: Colors.white, width: 3)
+                                  : null,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: item['color2'].withValues(alpha: isSelected ? 0.5 : 0.25),
+                                  blurRadius: isSelected ? 8 : 4,
+                                  offset: Offset(0, isSelected ? 4 : 2),
                                 ),
-                                borderRadius: BorderRadius.circular(20),
-                                border: isSelected
-                                    ? Border.all(color: Colors.white, width: 3)
-                                    : null,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: item['color2'].withValues(alpha: isSelected ? 0.5 : 0.25),
-                                    blurRadius: isSelected ? 8 : 4,
-                                    offset: Offset(0, isSelected ? 4 : 2),
+                              ],
+                            ),
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  right: -10,
+                                  bottom: -10,
+                                  child: Opacity(
+                                    opacity: 0.15,
+                                    child: Text(
+                                      item['icon'],
+                                      style: const TextStyle(fontSize: 54),
+                                    ),
                                   ),
-                                ],
-                              ),
-                              child: Stack(
-                                children: [
-                                  Positioned(
-                                    right: -10,
-                                    bottom: -10,
-                                    child: Opacity(
-                                      opacity: 0.15,
-                                      child: Text(
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
                                         item['icon'],
-                                        style: const TextStyle(fontSize: 54),
+                                        style: const TextStyle(fontSize: 22),
                                       ),
+                                      Text(
+                                        item['lang'],
+                                        style: GoogleFonts.nunito(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: Icon(
+                                      Icons.check_circle_rounded,
+                                      color: Colors.white,
+                                      size: 18,
                                     ),
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(12.0),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          item['icon'],
-                                          style: const TextStyle(fontSize: 22),
-                                        ),
-                                        Text(
-                                          item['lang'],
-                                          style: GoogleFonts.nunito(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    const Positioned(
-                                      top: 6,
-                                      right: 6,
-                                      child: Icon(
-                                        Icons.check_circle_rounded,
-                                        color: Colors.white,
-                                        size: 18,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 36),
+                  ),
+                  const SizedBox(height: 36),
 
-                    // Find Match Pulsing Button
-                    ScaleTransition(
-                      scale: Tween<double>(begin: 0.98, end: 1.02).animate(_pulseController),
-                      child: SizedBox(
-                        width: 220,
-                        child: Duo3dButton(
-                          faceColor: const Color(0xFFFFB020),
-                          shadowColor: const Color(0xFFD88900),
-                          height: 54,
-                          borderRadius: 27,
-                          onPressed: _startSearching,
-                          child: Text(
-                            "FIND MATCH",
-                            style: GoogleFonts.nunito(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.0,
-                            ),
+                  // 6. Start Match Button
+                  ScaleTransition(
+                    scale: Tween<double>(begin: 0.98, end: 1.02).animate(_pulseController),
+                    child: SizedBox(
+                      width: 220,
+                      child: Duo3dButton(
+                        faceColor: const Color(0xFFFFB020),
+                        shadowColor: const Color(0xFFD88900),
+                        height: 54,
+                        borderRadius: 27,
+                        onPressed: _startSearching,
+                        child: Text(
+                          "Start Match",
+                          style: GoogleFonts.nunito(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.0,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 80),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),
@@ -1241,31 +1227,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper stats item
-  Widget _buildStatItem(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.nunito(
-            color: color,
-            fontWeight: FontWeight.w900,
-            fontSize: 20,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: GoogleFonts.nunito(
-            color: const Color(0xFF9AAEC4),
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
-    );
-  }
+
 
   // 2. SEARCHING VIEW
   Widget _buildSearchingView() {
@@ -2543,228 +2505,274 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     );
   }
 
-  // 5. RESULTS VIEW (Animated count-up and Confetti)
+  // 5. RESULTS VIEW (Redesigned matching mockup)
   Widget _buildResultsView() {
     final bool isVictory = _userScore > _opponentScore;
     final bool isDefeat = _userScore < _opponentScore;
 
-    Color bgGradientStart = const Color(0xFF2ECC71);
-    Color bgGradientEnd = const Color(0xFF27AE60);
-    String headerText = "Victory!";
-    String scoreSubtitle = "You dominated $_opponentName in the duel!";
-    String iconString = "👑";
-
-    if (isDefeat) {
-      bgGradientStart = const Color(0xFF9E2A2B);
-      bgGradientEnd = const Color(0xFF5E1914);
-      headerText = "Defeat";
-      scoreSubtitle = "$_opponentName was faster this time.";
-      iconString = "😢";
-    } else if (!isVictory && !isDefeat) {
-      bgGradientStart = const Color(0xFFF39C12);
-      bgGradientEnd = const Color(0xFFD35400);
-      headerText = "Draw!";
-      scoreSubtitle = "You both ended with equal scores!";
-      iconString = "🤝";
-    }
+    final Map<String, dynamic> activeAvatar = _avatars[_avatarIndex];
+    final Map<String, dynamic> opponentAvatar = _avatars[_opponentAvatarIndex];
+    final int accuracy = _questions.isEmpty ? 0 : ((_userScore / (_questions.length * 20)) * 100).toInt();
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [bgGradientStart, bgGradientEnd],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Confetti Overlay (for Victory only)
-            if (isVictory)
-              Positioned.fill(
-                child: AnimatedBuilder(
-                  animation: _confettiController,
-                  builder: (context, child) {
-                    return CustomPaint(
-                      painter: ConfettiPainter(
-                        particles: _confettiParticles,
-                        animationValue: _confettiController.value,
-                      ),
-                    );
-                  },
-                ),
+      backgroundColor: const Color(0xFF4AC4FF),
+      body: Stack(
+        children: [
+          // Background soft code pattern SVG
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.15,
+              child: SvgPicture.asset(
+                'assets/images/codu_background_pattern_mobile_soft.svg',
+                fit: BoxFit.cover,
               ),
+            ),
+          ),
 
+          // Confetti Overlay (for Victory only)
+          if (isVictory)
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.1,
+              child: AnimatedBuilder(
+                animation: _confettiController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: ConfettiPainter(
+                      particles: _confettiParticles,
+                      animationValue: _confettiController.value,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              child: Column(
+                children: [
+                  // Back button row on top
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      onPressed: () {
+                        _confettiController.stop();
+                        _updateState(DuelState.lobby);
+                        _loadUserData();
+                        AudioService().playMusic('Audio/Menu Music.mp3');
+                      },
+                    ),
+                  ),
+
+                  const Spacer(), // Top Spacer for vertical centering
+
+                  // Centered Title below the back button
+                  Text(
+                    "Battle Result",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+
+                  // Side-by-side white cards centered vertically relative to each other
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        flex: 6, // Current player card is wider
+                        child: _buildResultPlayerCard(
+                          avatar: activeAvatar,
+                          title: isVictory
+                              ? "You Win !"
+                              : (isDefeat ? "You Lost !" : "You Draw !"),
+                          isCurrentPlayer: true,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 5, // Opponent card is narrower
+                        child: _buildResultPlayerCard(
+                          avatar: opponentAvatar,
+                          title: isVictory
+                              ? "Opponent\nLost"
+                              : (isDefeat ? "Opponent\nWon !" : "Opponent\nDraw"),
+                          isCurrentPlayer: false,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Trophy Capsule Pill
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text("🏆", style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Text(
+                          "${_trophies - _trophyDelta}  →  $_trophies",
+                          style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1E2A38),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Performance statistics
+                  Text(
+                    "Total Time: ${_formatTimer(_matchDurationSeconds)}",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Accuracy: $accuracy%",
+                    style: GoogleFonts.nunito(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // 3D Play Again Button
+                  SizedBox(
+                    width: 240,
+                    child: Duo3dButton(
+                      faceColor: const Color(0xFFFFB020),
+                      shadowColor: const Color(0xFFD88900),
+                      height: 48,
+                      onPressed: () {
+                        _confettiController.stop();
+                        _updateState(DuelState.lobby);
+                        _loadUserData();
+                        AudioService().playMusic('Audio/Menu Music.mp3');
+                      },
+                      child: Text(
+                        "Play Again",
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 3D Main Menu Button
+                  SizedBox(
+                    width: 240,
+                    child: Duo3dButton(
+                      faceColor: const Color(0xFFB0B0B0),
+                      shadowColor: const Color(0xFF8A8A8A),
+                      height: 48,
+                      onPressed: () {
+                        _confettiController.stop();
+                        if (widget.onBack != null) {
+                          widget.onBack!();
+                        } else {
+                          _updateState(DuelState.lobby);
+                        }
+                      },
+                      child: Text(
+                        "Main Menu",
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Spacer(), // Bottom Spacer for vertical centering
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper Widget for result player card container
+  Widget _buildResultPlayerCard({
+    required Map<String, dynamic> avatar,
+    required String title,
+    bool isCurrentPlayer = false,
+  }) {
+    final double avatarSize = isCurrentPlayer ? 80.0 : 60.0;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        vertical: isCurrentPlayer ? 28 : 16,
+        horizontal: isCurrentPlayer ? 16 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: avatarSize,
+            height: avatarSize,
+            decoration: BoxDecoration(
+              color: avatar['bgColor'],
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: ClipOval(
+              child: Transform.scale(
+                scale: 1.3,
                 child: SvgPicture.asset(
-                  'assets/images/codu_background_pattern_mobile_soft.svg',
+                  avatar['svgPath'],
+                  width: avatarSize,
+                  height: avatarSize,
                   fit: BoxFit.cover,
                 ),
               ),
             ),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    Text(
-                      iconString,
-                      style: const TextStyle(fontSize: 64),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      headerText,
-                      style: GoogleFonts.nunito(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      scoreSubtitle,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.nunito(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Results Card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              Column(
-                                children: [
-                                  Text(
-                                    "Your Score",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF9AAEC4),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "$_userScore",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF1E2A38),
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                width: 1.5,
-                                height: 36,
-                                color: const Color(0xFFE2E8F0),
-                              ),
-                              Column(
-                                children: [
-                                  Text(
-                                    "Erica's Score",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF9AAEC4),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "$_opponentScore",
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFF1E2A38),
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 28),
-
-                          // Trophies Adjustments with Count-Up/Down Animation
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text("🏆", style: TextStyle(fontSize: 28)),
-                              const SizedBox(width: 8),
-                              TweenAnimationBuilder<double>(
-                                duration: const Duration(seconds: 2),
-                                tween: Tween<double>(begin: _trophies.toDouble(), end: (_trophies + _trophyDelta).toDouble()),
-                                builder: (context, val, child) {
-                                  return Text(
-                                    "${val.toInt()}",
-                                    style: GoogleFonts.nunito(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF1E2A38),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _trophyDelta >= 0 ? "(+$_trophyDelta)" : "($_trophyDelta)",
-                                style: GoogleFonts.nunito(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  color: _trophyDelta >= 0 ? const Color(0xFF2ECC71) : const Color(0xFFE55353),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 28),
-
-                          Duo3dButton(
-                            faceColor: const Color(0xFFFFB020),
-                            shadowColor: const Color(0xFFD88900),
-                            height: 48,
-                            onPressed: () {
-                              _confettiController.stop();
-                              _updateState(DuelState.lobby);
-                              _loadUserData();
-                              AudioService().playMusic('Audio/Menu Music.mp3');
-                            },
-                            child: Text(
-                              "CONTINUE",
-                              style: GoogleFonts.nunito(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                  ],
-                ),
-              ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.nunito(
+              color: const Color(0xFF1E2A38),
+              fontSize: isCurrentPlayer ? 22 : 16,
+              fontWeight: FontWeight.w900,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

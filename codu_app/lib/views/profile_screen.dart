@@ -554,16 +554,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final double spacing = ((availableWidth - (badgeSize * 4)) / 3).clamp(4.0, 16.0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF56CCF2),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // SVG mascot background
-          Positioned.fill(
-            child: SvgPicture.asset(
-              'assets/images/codu_background_pattern_mobile_soft.svg',
-              fit: BoxFit.cover,
-            ),
-          ),
+          // Background pattern is now drawn by the parent MainScreen root stack
 
           // Main content (always visible)
           SafeArea(
@@ -871,14 +865,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // Slide-down Friend List Overlay
+          // Slide-in from right Friend List Overlay
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 350),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOutQuad,
-            left: 0,
-            right: 0,
-            top: _showFriendList ? 0 : -MediaQuery.of(context).size.height,
-            height: MediaQuery.of(context).size.height,
+            top: 0,
+            bottom: 0,
+            left: _showFriendList ? 0 : MediaQuery.of(context).size.width,
+            width: MediaQuery.of(context).size.width,
             child: FriendListView(
               onBack: () => setState(() => _showFriendList = false),
               onAddFriend: () {

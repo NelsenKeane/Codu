@@ -192,56 +192,35 @@ class UserDataService {
     },
   ];
 
-  // Track app open date and calculate streak
+  // Track app open date and check if streak is broken
   Future<void> trackAppOpen() async {
     final uid = _uid;
     if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
 
-    final now = DateTime.now();
-    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-    List<String> dates = prefs.getStringList('open_dates_$uid') ?? [];
-    
-    // If dates list is empty, initialize with today's date so they start with a 1-day streak
-    if (dates.isEmpty) {
-      dates.add(todayStr);
-      await prefs.setStringList('open_dates_$uid', dates);
-      await prefs.setInt('streak_$uid', 1);
-      return;
-    }
-
-    if (!dates.contains(todayStr)) {
-      dates.add(todayStr);
-      dates.sort();
-      await prefs.setStringList('open_dates_$uid', dates);
-
-      int calculatedStreak = _calculateConsecutiveStreak(dates);
-      await prefs.setInt('streak_$uid', calculatedStreak);
-    }
-  }
-
-  // Calculate consecutive days ending with the latest date
-  int _calculateConsecutiveStreak(List<String> dates) {
-    if (dates.isEmpty) return 0;
-
-    List<DateTime> parsedDates = dates.map((d) {
-      final parts = d.split('-');
-      return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    }).toList();
-
-    parsedDates.sort();
-
-    int streak = 1;
-    for (int i = parsedDates.length - 1; i > 0; i--) {
-      final difference = parsedDates[i].difference(parsedDates[i - 1]).inDays;
-      if (difference == 1) {
-        streak++;
-      } else if (difference > 1) {
-        break; // Streak broken
+    String? lastIncrementStr = prefs.getString('last_streak_increment_date_$uid');
+    if (lastIncrementStr == null) {
+      final openDates = prefs.getStringList('open_dates_$uid');
+      if (openDates != null && openDates.isNotEmpty) {
+        openDates.sort();
+        lastIncrementStr = openDates.last;
+        await prefs.setString('last_streak_increment_date_$uid', lastIncrementStr);
       }
     }
-    return streak;
+
+    if (lastIncrementStr != null) {
+      final parts = lastIncrementStr.split('-');
+      final lastDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final diffInDays = today.difference(lastDate).inDays;
+
+      if (diffInDays > 1) {
+        // Streak is broken! Reset to 0
+        await prefs.setInt('streak_$uid', 0);
+      }
+    }
   }
 
   // Load Streak
@@ -250,23 +229,23 @@ class UserDataService {
     if (uid == null) return 0;
     final prefs = await SharedPreferences.getInstance();
 
-    List<String> dates = prefs.getStringList('open_dates_$uid') ?? [];
-    if (dates.isEmpty) {
-      // Auto-initialize
-      await trackAppOpen();
-      dates = prefs.getStringList('open_dates_$uid') ?? [];
+    String? lastIncrementStr = prefs.getString('last_streak_increment_date_$uid');
+    if (lastIncrementStr == null) {
+      final openDates = prefs.getStringList('open_dates_$uid');
+      if (openDates != null && openDates.isNotEmpty) {
+        openDates.sort();
+        lastIncrementStr = openDates.last;
+        await prefs.setString('last_streak_increment_date_$uid', lastIncrementStr);
+      }
     }
 
-    // Verify if streak has expired (more than 1 day since last open)
-    if (dates.isNotEmpty) {
-      dates.sort();
-      final latestStr = dates.last;
-      final parts = latestStr.split('-');
-      final latestDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    if (lastIncrementStr != null) {
+      final parts = lastIncrementStr.split('-');
+      final lastDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
 
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final diffInDays = today.difference(latestDate).inDays;
+      final diffInDays = today.difference(lastDate).inDays;
 
       if (diffInDays > 1) {
         // Streak is broken! Reset to 0
@@ -285,14 +264,13 @@ class UserDataService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('streak_$uid', streak);
 
-    // Also update open_dates to match the new streak
-    final now = DateTime.now();
-    List<String> dates = [];
-    for (int i = streak - 1; i >= 0; i--) {
-      final d = now.subtract(Duration(days: i));
-      dates.add("${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}");
+    if (streak == 0) {
+      await prefs.remove('last_streak_increment_date_$uid');
+    } else {
+      final now = DateTime.now();
+      final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      await prefs.setString('last_streak_increment_date_$uid', todayStr);
     }
-    await prefs.setStringList('open_dates_$uid', dates);
   }
 
   // Load Trophies / Stars
@@ -528,9 +506,51 @@ class UserDataService {
     int currentTrophies = await getTrophies();
     await saveTrophies(currentTrophies + 10);
 
-    // Increase streak by 1
-    int currentStreak = await getStreak();
-    await saveStreak(currentStreak + 1);
+    // Increase streak by 1 only if they haven't completed a course level today
+    final prefs = await SharedPreferences.getInstance();
+    final uid = _uid;
+    if (uid != null) {
+      final now = DateTime.now();
+      final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      
+      String? lastIncrementStr = prefs.getString('last_streak_increment_date_$uid');
+      if (lastIncrementStr == null) {
+        final openDates = prefs.getStringList('open_dates_$uid');
+        if (openDates != null && openDates.isNotEmpty) {
+          openDates.sort();
+          lastIncrementStr = openDates.last;
+          await prefs.setString('last_streak_increment_date_$uid', lastIncrementStr);
+        }
+      }
+
+      int currentStreak = prefs.getInt('streak_$uid') ?? 0;
+      int newStreak = currentStreak;
+
+      if (lastIncrementStr == null || currentStreak == 0) {
+        // First increment ever or starting fresh
+        newStreak = 1;
+        await prefs.setInt('streak_$uid', newStreak);
+        await prefs.setString('last_streak_increment_date_$uid', todayStr);
+      } else {
+        final parts = lastIncrementStr.split('-');
+        final lastDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        final today = DateTime(now.year, now.month, now.day);
+        final diffInDays = today.difference(lastDate).inDays;
+
+        if (diffInDays == 1) {
+          // Consecutive completion! +1 to streak
+          newStreak = currentStreak + 1;
+          await prefs.setInt('streak_$uid', newStreak);
+          await prefs.setString('last_streak_increment_date_$uid', todayStr);
+        } else if (diffInDays > 1) {
+          // Missed a day or more, reset streak to 1 since they completed a level today
+          newStreak = 1;
+          await prefs.setInt('streak_$uid', newStreak);
+          await prefs.setString('last_streak_increment_date_$uid', todayStr);
+        }
+        // If diffInDays == 0, they already completed a level today. No streak update.
+      }
+    }
 
     // Sync to Firestore in the background (non-blocking)
     FriendService().syncUserToFirestore().catchError((e) {
