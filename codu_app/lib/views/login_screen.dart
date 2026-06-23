@@ -262,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Logo
                         Image.asset(
                           'assets/images/codu_logo.png',
-                          height: 56,
+                          height: 85,
                           fit: BoxFit.contain,
                         ),
                         const SizedBox(height: 24),

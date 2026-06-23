@@ -158,6 +158,12 @@ class _FriendListViewState extends State<FriendListView> {
       backgroundColor: const Color(0xFF56CCF2), // Premium sky blue
       body: Stack(
         children: [
+          Positioned.fill(
+            child: SvgPicture.asset(
+              'assets/images/codu_background_pattern_mobile_soft.svg',
+              fit: BoxFit.cover,
+            ),
+          ),
           // 1. Background Silhouettes
           _buildBackgroundDecor(statusBarHeight),
 

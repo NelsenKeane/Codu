@@ -100,6 +100,18 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   bool _isAnswerCorrect = false;
   final Map<String, int?> _slotContents = {};
 
+  // GlobalKeys to fetch sizes & coordinates for fly-in/fly-back choice chip animation
+  final Map<int, GlobalKey> _choiceKeys = {};
+  final Map<String, GlobalKey> _slotKeys = {};
+  final Set<int> _animatingChoices = {};
+
+  String? _flyingText;
+  Offset? _flyingStart;
+  Offset? _flyingEnd;
+  int? _flyingChoiceIndex;
+  String? _flyingSlotId;
+  bool _isFlyingBack = false;
+
   int _trophyDelta = 0;
 
   // Animation Controllers
@@ -226,6 +238,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    widget.onShowBottomBarChanged?.call(true);
     _searchTimer?.cancel();
     _countdownTimer?.cancel();
     _roundTimer?.cancel();
@@ -577,6 +590,14 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
 
   void _clearSlots() {
     _slotContents.clear();
+    _choiceKeys.clear();
+    _slotKeys.clear();
+    _animatingChoices.clear();
+    _flyingText = null;
+    _flyingStart = null;
+    _flyingEnd = null;
+    _flyingChoiceIndex = null;
+    _flyingSlotId = null;
     final question = _questions[_currentQuestionIndex];
     for (var line in question.codeLines) {
       for (var segment in line) {
@@ -601,14 +622,12 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     });
 
     if (alreadyPlacedSlot != null) {
-      setState(() {
-        _slotContents[alreadyPlacedSlot!] = null;
-      });
+      _handleSlotTap(alreadyPlacedSlot!, choiceIndex);
     } else {
       String? firstEmptySlot;
       for (var line in question.codeLines) {
         for (var segment in line) {
-          if (segment.isSlot && _slotContents[segment.text] == null) {
+          if (segment.isSlot && _slotContents[segment.text] == null && _flyingSlotId != segment.text) {
             firstEmptySlot = segment.text;
             break;
           }
@@ -617,11 +636,68 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
       }
 
       if (firstEmptySlot != null) {
+        final choiceKey = _choiceKeys[choiceIndex];
+        final slotKey = _slotKeys[firstEmptySlot];
+        if (choiceKey != null && slotKey != null) {
+          final RenderBox? choiceBox = choiceKey.currentContext?.findRenderObject() as RenderBox?;
+          final RenderBox? slotBox = slotKey.currentContext?.findRenderObject() as RenderBox?;
+          if (choiceBox != null && slotBox != null) {
+            final choicePos = choiceBox.localToGlobal(Offset.zero);
+            final slotPos = slotBox.localToGlobal(Offset.zero);
+
+            setState(() {
+              _flyingChoiceIndex = choiceIndex;
+              _flyingSlotId = firstEmptySlot;
+              _flyingText = question.choices[choiceIndex];
+              _flyingStart = choicePos;
+              _flyingEnd = slotPos;
+              _isFlyingBack = false;
+              _animatingChoices.add(choiceIndex);
+            });
+            return;
+          }
+        }
+
+        // Fallback: place immediately
         setState(() {
           _slotContents[firstEmptySlot!] = choiceIndex;
         });
       }
     }
+  }
+
+  void _handleSlotTap(String slotId, int choiceIndex) {
+    if (_isAnswerChecked) return;
+
+    final question = _questions[_currentQuestionIndex];
+    final slotKey = _slotKeys[slotId];
+    final choiceKey = _choiceKeys[choiceIndex];
+
+    if (slotKey != null && choiceKey != null) {
+      final RenderBox? slotBox = slotKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? choiceBox = choiceKey.currentContext?.findRenderObject() as RenderBox?;
+      if (slotBox != null && choiceBox != null) {
+        final slotPos = slotBox.localToGlobal(Offset.zero);
+        final choicePos = choiceBox.localToGlobal(Offset.zero);
+
+        setState(() {
+          _slotContents[slotId] = null; // Clear slot instantly to show flying away
+          _flyingChoiceIndex = choiceIndex;
+          _flyingSlotId = slotId;
+          _flyingText = question.choices[choiceIndex];
+          _flyingStart = slotPos;
+          _flyingEnd = choicePos;
+          _isFlyingBack = true;
+          _animatingChoices.add(choiceIndex);
+        });
+        return;
+      }
+    }
+
+    // Fallback: remove instantly
+    setState(() {
+      _slotContents[slotId] = null;
+    });
   }
 
   void _onCheckAnswer() {
@@ -1745,10 +1821,15 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                               children: [
                                 Column(
                                   children: [
-                                    // Shake/Scale animation on User score update
+                                    // Shake/Scale animation on User score update or checked state
                                     TweenAnimationBuilder<double>(
                                       duration: const Duration(milliseconds: 300),
-                                      tween: Tween<double>(begin: 1.0, end: _userScore != _userScorePrevious ? 1.25 : 1.0),
+                                      tween: Tween<double>(
+                                        begin: 1.0,
+                                        end: _isAnswerChecked
+                                            ? 1.35
+                                            : (_userScore != _userScorePrevious ? 1.25 : 1.0),
+                                      ),
                                       builder: (context, val, child) {
                                         return Transform.scale(
                                           scale: val,
@@ -1773,7 +1854,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: _isAnswerChecked ? 18 : 4),
                                     Text(
                                       _displayName,
                                       style: GoogleFonts.nunito(
@@ -1803,6 +1884,71 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                     ),
                                   ),
                                 ),
+                                // Speech bubble centered below user avatar when checked
+                                if (_isAnswerChecked)
+                                  Positioned(
+                                    top: 104,
+                                    left: -100,
+                                    right: -100,
+                                    child: Center(
+                                      child: TweenAnimationBuilder<double>(
+                                        key: ValueKey('user_speech_bubble_$_isAnswerChecked-$_isAnswerCorrect'),
+                                        tween: Tween<double>(begin: 0.0, end: 1.0),
+                                        duration: const Duration(milliseconds: 500),
+                                        curve: Curves.elasticOut,
+                                        builder: (context, scale, child) {
+                                          final bubbleColor = _isAnswerCorrect ? const Color(0xFFE8F7FF) : const Color(0xFFFDECEE);
+                                          final borderColor = _isAnswerCorrect ? const Color(0xFFB3E5FC) : const Color(0xFFF8BBD0);
+                                          final textColor = _isAnswerCorrect ? const Color(0xFF0288D1) : const Color(0xFFE55353);
+                                          final text = _isAnswerCorrect ? "EXCELLENT! 🚀" : "TRY AGAIN! 🧩";
+
+                                          return Transform.scale(
+                                            scale: scale,
+                                            alignment: const Alignment(0.0, -1.0), // pivot top center towards the avatar
+                                            child: Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: bubbleColor,
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    border: Border.all(color: borderColor, width: 2),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black.withValues(alpha: 0.05),
+                                                        blurRadius: 4,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Text(
+                                                    text,
+                                                    style: GoogleFonts.nunito(
+                                                      color: textColor,
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Positioned(
+                                                  top: -10,
+                                                  left: 0,
+                                                  right: 0,
+                                                  child: Center(
+                                                    child: CustomPaint(
+                                                      painter: BubbleTailUpPainter(color: bubbleColor, borderColor: borderColor),
+                                                      size: const Size(12, 10),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
                                 // Floating Emote bubble above User Avatar
                                 if (_userEmotePath != null)
                                   Positioned(
@@ -1881,7 +2027,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: _isAnswerChecked ? 18 : 4),
                                     Text(
                                       _opponentName,
                                       style: GoogleFonts.nunito(
@@ -1922,7 +2068,11 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          height: _isAnswerChecked ? 72.0 : 12.0,
+                        ),
 
                         // Progress Bar
                         Container(
@@ -1983,18 +2133,38 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                   child: Column(
                                     children: [
                                       // Code Question Card
-                                      Container(
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 400),
+                                        curve: Curves.easeInOut,
                                         width: double.infinity,
                                         padding: const EdgeInsets.all(16.0),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
                                           borderRadius: BorderRadius.circular(20),
+                                          border: _isAnswerChecked
+                                              ? (_isAnswerCorrect
+                                                  ? Border.all(color: const Color(0xFF58CC02), width: 3)
+                                                  : Border.all(color: const Color(0xFFE55353), width: 3))
+                                              : Border.all(color: Colors.transparent, width: 3),
                                           boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.03),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
+                                            if (_isAnswerChecked && _isAnswerCorrect)
+                                              BoxShadow(
+                                                color: const Color(0xFF58CC02).withValues(alpha: 0.35),
+                                                blurRadius: 15,
+                                                spreadRadius: 3,
+                                              )
+                                            else if (_isAnswerChecked && !_isAnswerCorrect)
+                                              BoxShadow(
+                                                color: const Color(0xFFE55353).withValues(alpha: 0.35),
+                                                blurRadius: 15,
+                                                spreadRadius: 3,
+                                              )
+                                            else
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.03),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
                                           ],
                                         ),
                                         child: Column(
@@ -2026,7 +2196,6 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                         ),
                                       ),
                                       const SizedBox(height: 20),
-
                                       // Choices palette
                                       Wrap(
                                         spacing: 8,
@@ -2039,6 +2208,9 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                             if (value == index) isAlreadyPlaced = true;
                                           });
 
+                                          final bool isAnimating = _animatingChoices.contains(index);
+                                          final key = _choiceKeys.putIfAbsent(index, () => GlobalKey());
+
                                           return Draggable<int>(
                                             data: index,
                                             feedback: Material(
@@ -2050,8 +2222,12 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                                               child: _buildChoiceChip(choice, isPlaced: true),
                                             ),
                                             child: GestureDetector(
+                                              key: key,
                                               onTap: () => _handleChoiceTap(index),
-                                              child: _buildChoiceChip(choice, isPlaced: isAlreadyPlaced),
+                                              child: Opacity(
+                                                opacity: isAnimating ? 0.0 : 1.0,
+                                                child: _buildChoiceChip(choice, isPlaced: isAlreadyPlaced),
+                                              ),
                                             ),
                                           );
                                         }),
@@ -2173,6 +2349,36 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
+            if (_flyingText != null && _flyingStart != null && _flyingEnd != null)
+              TweenAnimationBuilder<double>(
+                key: ValueKey('$_flyingChoiceIndex-$_flyingSlotId-$_isFlyingBack'),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutQuad,
+                onEnd: () {
+                  setState(() {
+                    if (!_isFlyingBack) {
+                      _slotContents[_flyingSlotId!] = _flyingChoiceIndex;
+                    }
+                    _animatingChoices.remove(_flyingChoiceIndex);
+                    _flyingText = null;
+                    _flyingStart = null;
+                    _flyingEnd = null;
+                    _flyingChoiceIndex = null;
+                    _flyingSlotId = null;
+                  });
+                },
+                builder: (context, value, child) {
+                  final currentPos = Offset.lerp(_flyingStart, _flyingEnd, value)!;
+                  return Positioned(
+                    left: currentPos.dx,
+                    top: currentPos.dy,
+                    child: IgnorePointer(
+                      child: _buildChoiceChip(_flyingText!, isSlottedStyle: true),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -2266,8 +2472,10 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
   Widget _buildSlotTarget(String slotId, String placeholder) {
     final int? placedIndex = _slotContents[slotId];
     final question = _questions[_currentQuestionIndex];
+    final key = _slotKeys.putIfAbsent(slotId, () => GlobalKey());
 
     return DragTarget<int>(
+      key: key,
       onAcceptWithDetails: (details) {
         if (_isAnswerChecked) return;
         setState(() {
@@ -2294,9 +2502,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                     GestureDetector(
                       onTap: () {
                         if (_isAnswerChecked) return;
-                        setState(() {
-                          _slotContents[slotId] = null;
-                        });
+                        _handleSlotTap(slotId, placedIndex);
                       },
                       child: _buildChoiceChip(placedValue, isSlottedStyle: true),
                     ),
@@ -2306,9 +2512,7 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                         right: -6,
                         child: GestureDetector(
                           onTap: () {
-                            setState(() {
-                              _slotContents[slotId] = null;
-                            });
+                            _handleSlotTap(slotId, placedIndex);
                           },
                           child: Container(
                             width: 16,
@@ -2426,77 +2630,64 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
     if (!_isAnswerChecked) {
       return Container(
         width: double.infinity,
-        color: Colors.white,
-        padding: const EdgeInsets.all(16.0),
-        child: Duo3dButton(
-          faceColor: const Color(0xFFFFB020),
-          shadowColor: const Color(0xFFD88900),
-          height: 48,
-          onPressed: _onCheckAnswer,
-          child: Text(
-            "RUN CODE",
-            style: GoogleFonts.nunito(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final Color barColor = _isAnswerCorrect ? const Color(0xFFE3FCEF) : const Color(0xFFFFECEB);
-    final Color textColor = _isAnswerCorrect ? const Color(0xFF1E8A44) : const Color(0xFFD32F2F);
-    final String resultIcon = _isAnswerCorrect ? "🎉" : "😢";
-    final String resultTitle = _isAnswerCorrect ? "Correct!" : "Incorrect";
-
-    return Container(
-      width: double.infinity,
-      color: barColor,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Text(resultIcon, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  resultTitle,
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            SizedBox(
+              width: 145,
+              child: Duo3dButton(
+                faceColor: const Color(0xFFFFB020),
+                shadowColor: const Color(0xFFD88900),
+                height: 48,
+                onPressed: _onCheckAnswer,
+                child: Text(
+                  "RUN CODE",
                   style: GoogleFonts.nunito(
-                    color: textColor,
+                    color: Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                   ),
                 ),
-                if (!_isAnswerCorrect)
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final Color faceColor = _isAnswerCorrect ? const Color(0xFF58CC02) : const Color(0xFFE55353);
+    final Color shadowColor = _isAnswerCorrect ? const Color(0xFF439E00) : const Color(0xFFC03C3C);
+
+    return Container(
+      width: double.infinity,
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          SizedBox(
+            width: 145,
+            child: Duo3dButton(
+              faceColor: faceColor,
+              shadowColor: shadowColor,
+              height: 48,
+              onPressed: _onContinueGameplay,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    "Try again in the next slot!",
+                    "CONTINUE",
                     style: GoogleFonts.nunito(
-                      color: textColor.withValues(alpha: 0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
                     ),
                   ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 120,
-            child: Duo3dButton(
-              faceColor: _isAnswerCorrect ? const Color(0xFF2ECC71) : const Color(0xFFE55353),
-              shadowColor: _isAnswerCorrect ? const Color(0xFF27AE60) : const Color(0xFFC0392B),
-              height: 44,
-              onPressed: _onContinueGameplay,
-              child: Text(
-                "CONTINUE",
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
+                ],
               ),
             ),
           ),
@@ -2690,10 +2881,10 @@ class _DuelScreenState extends State<DuelScreen> with TickerProviderStateMixin {
                       height: 48,
                       onPressed: () {
                         _confettiController.stop();
+                        widget.onShowBottomBarChanged?.call(true);
+                        _updateState(DuelState.lobby);
                         if (widget.onBack != null) {
                           widget.onBack!();
-                        } else {
-                          _updateState(DuelState.lobby);
                         }
                       },
                       child: Text(
@@ -2859,4 +3050,115 @@ class TrianglePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant TrianglePainter oldDelegate) => false;
+}
+
+class BubbleTailPainter extends CustomPainter {
+  final Color color;
+  final Color borderColor;
+
+  BubbleTailPainter({required this.color, required this.borderColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    // Triangle tail pointing left
+    path.moveTo(size.width, 0);
+    path.lineTo(0, size.height / 2);
+    path.lineTo(size.width, size.height);
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    final borderPath = Path();
+    borderPath.moveTo(size.width, 0);
+    borderPath.lineTo(0, size.height / 2);
+    borderPath.lineTo(size.width, size.height);
+    canvas.drawPath(borderPath, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class BubbleTailDownPainter extends CustomPainter {
+  final Color color;
+  final Color borderColor;
+
+  BubbleTailDownPainter({required this.color, required this.borderColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    // Triangle tail pointing down
+    path.moveTo(0, 0);
+    path.lineTo(size.width / 2, size.height);
+    path.lineTo(size.width, 0);
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    final borderPath = Path();
+    borderPath.moveTo(0, 0);
+    borderPath.lineTo(size.width / 2, size.height);
+    borderPath.lineTo(size.width, 0);
+    canvas.drawPath(borderPath, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class BubbleTailUpPainter extends CustomPainter {
+  final Color color;
+  final Color borderColor;
+
+  BubbleTailUpPainter({required this.color, required this.borderColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    // Triangle tail pointing up
+    path.moveTo(size.width / 2, 0);
+    path.lineTo(0, size.height);
+    path.lineTo(size.width, size.height);
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    final borderPath = Path();
+    borderPath.moveTo(size.width / 2, 0);
+    borderPath.lineTo(0, size.height);
+    borderPath.lineTo(size.width, size.height);
+    canvas.drawPath(borderPath, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

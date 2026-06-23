@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/user_data_service.dart';
 import '../services/friend_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'lessons_screen.dart';
 import 'levels_screen.dart';
 import 'leaderboard_screen.dart';
@@ -29,6 +30,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Map<String, dynamic>> _history = [];
   bool _isLoadingData = true;
   bool _showBottomBar = true;
+  String _displayName = "Codu Student";
 
   @override
   void initState() {
@@ -39,11 +41,27 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _loadUserData() async {
+    await UserDataService().syncDataFromFirestore();
     await UserDataService().trackAppOpen();
     final streak = await UserDataService().getStreak();
     final subjects = await UserDataService().getSubjects();
     final history = await UserDataService().getHistory();
-    
+
+    // Get user displayName from Firebase / local cache
+    final user = FirebaseAuth.instance.currentUser;
+    final savedName = await UserDataService().getDisplayName();
+    String email = user?.email ?? "student@codu.com";
+    String localUsername = email.split('@')[0];
+
+    String finalDisplayName;
+    if (savedName != null && savedName.isNotEmpty) {
+      finalDisplayName = savedName;
+    } else if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+      finalDisplayName = user.displayName!;
+    } else {
+      finalDisplayName = localUsername;
+    }
+
     // Sync profile to Firestore asynchronously
     FriendService().syncUserToFirestore().catchError((e) {
       debugPrint("Failed to sync user to firestore: $e");
@@ -54,11 +72,11 @@ class _MainScreenState extends State<MainScreen> {
         _streak = streak;
         _subjects = subjects;
         _history = history;
+        _displayName = finalDisplayName;
         _isLoadingData = false;
       });
     }
   }
-
 
   @override
   void dispose() {
@@ -68,79 +86,100 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildHomeDashboard(double statusBarHeight) {
     final filteredSubjects = _subjects
-        .where((s) => s['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where(
+          (s) => s['title'].toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
         .toList();
 
     final filteredHistory = _history
-        .where((h) => h['title'].toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where(
+          (h) => h['title'].toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
         .toList();
 
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: Column(
+          child: Stack(
             children: [
-              // Top Header Area (Sky blue, mascot, speech bubble)
-              _buildHeader(statusBarHeight),
-            ],
-          ),
-        ),
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(36),
-                topRight: Radius.circular(36),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 24),
-                // Search bar & Streak Row
-                _buildSearchRow(),
-                const SizedBox(height: 28),
+              // 1. White Panel (drawn behind the header)
+              Column(
+                children: [
+                  Visibility(
+                    visible: false,
+                    maintainSize: true,
+                    maintainAnimation: true,
+                    maintainState: true,
+                    child: _buildHeader(statusBarHeight),
+                  ),
+                  Container(
+                    color: AppColors.cardBackground,
+                    child: Transform.translate(
+                      offset: const Offset(0, -50),
+                      child: Container(
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(36),
+                            topRight: Radius.circular(36),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 24),
+                            // Search bar & Streak Row
+                            _buildSearchRow(),
+                            const SizedBox(height: 28),
 
-                // Subjects Header
-                _buildSectionHeader(
-                  title: "Subjects",
-                  onViewAll: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const LessonsScreen()),
-                    );
-                    _loadUserData();
-                  },
-                ),
-                const SizedBox(height: 16),
+                            // Subjects Header
+                            _buildSectionHeader(
+                              title: "Subjects",
+                              onViewAll: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => const LessonsScreen(),
+                                  ),
+                                );
+                                _loadUserData();
+                              },
+                            ),
+                            const SizedBox(height: 16),
 
-                // Horizontal Subjects list
-                _buildSubjectsList(filteredSubjects),
-                const SizedBox(height: 28),
+                            // Horizontal Subjects list
+                            _buildSubjectsList(filteredSubjects),
+                            const SizedBox(height: 28),
 
-                // History Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Text(
-                    "History",
-                    style: GoogleFonts.nunito(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
+                            // History Header
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: Text(
+                                "History",
+                                style: GoogleFonts.nunito(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 22,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Grid-like History cards
+                            _buildHistoryCards(filteredHistory),
+
+                            // Extra padding for the floating navigation bar
+                            const SizedBox(height: 110),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // Grid-like History cards
-                _buildHistoryCards(filteredHistory),
-                
-                // Extra padding for the floating navigation bar
-                const SizedBox(height: 110),
-              ],
-            ),
+                ],
+              ),
+              // 2. Top Header Area (drawn on top of the white panel)
+              _buildHeader(statusBarHeight),
+            ],
           ),
         ),
       ],
@@ -216,88 +255,91 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
+
   // Header Area Widget
   Widget _buildHeader(double statusBarHeight) {
     return Padding(
-      padding: EdgeInsets.only(
-        top: statusBarHeight + 10,
-        left: 20,
-        right: 20,
-      ),
+      padding: EdgeInsets.only(top: statusBarHeight + 2, left: 20, right: 20),
       child: _buildMascotHeader(),
     );
   }
 
   // Mascot + Speech Bubble Widget
   Widget _buildMascotHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // Mascot
-        Transform.translate(
-          offset: const Offset(0, 35),
-          child: Container(
-            width: 175,
-            height: 175,
-            alignment: Alignment.bottomCenter,
-            child: Image.asset(
-              'assets/images/codu_mascot.png',
-              fit: BoxFit.contain,
+    return Transform.translate(
+      offset: const Offset(0, -45),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Mascot
+          Transform.translate(
+            offset: const Offset(0, 32),
+            child: Container(
+              width: 175,
+              height: 175,
+              alignment: Alignment.bottomCenter,
+              child: Image.asset(
+                'assets/images/codu_mascot.png',
+                fit: BoxFit.contain,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        // Speech Bubble
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 12.0),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      "Hey there! How can\nI help you today?",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.nunito(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        height: 1.2,
-                      ),
+          const SizedBox(width: 8),
+          // Speech Bubble
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 18.0),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                  ),
-                ),
-                // Bubble Tail pointing to the mascot
-                Positioned(
-                  left: -6,
-                  bottom: 16,
-                  child: RotationTransition(
-                    turns: const AlwaysStoppedAnimation(45 / 360),
-                    child: Container(
-                      width: 12,
-                      height: 12,
+                    decoration: BoxDecoration(
                       color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        "Welcome back, $_displayName!",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          height: 1.2,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  // Bubble Tail pointing to the mascot
+                  Positioned(
+                    left: -6,
+                    bottom: 16,
+                    child: RotationTransition(
+                      turns: const AlwaysStoppedAnimation(45 / 360),
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -372,10 +414,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             child: Row(
               children: [
-                const Text(
-                  "🔥",
-                  style: TextStyle(fontSize: 18),
-                ),
+                const Text("🔥", style: TextStyle(fontSize: 18)),
                 const SizedBox(width: 6),
                 Text(
                   "$_streak",
@@ -463,8 +502,16 @@ class _MainScreenState extends State<MainScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Color(subject['color1'] is int ? subject['color1'] : int.parse(subject['color1'].toString())),
-                    Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())),
+                    Color(
+                      subject['color1'] is int
+                          ? subject['color1']
+                          : int.parse(subject['color1'].toString()),
+                    ),
+                    Color(
+                      subject['color2'] is int
+                          ? subject['color2']
+                          : int.parse(subject['color2'].toString()),
+                    ),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -472,7 +519,11 @@ class _MainScreenState extends State<MainScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(subject['color2'] is int ? subject['color2'] : int.parse(subject['color2'].toString())).withValues(alpha: 0.3),
+                    color: Color(
+                      subject['color2'] is int
+                          ? subject['color2']
+                          : int.parse(subject['color2'].toString()),
+                    ).withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -607,7 +658,10 @@ class _MainScreenState extends State<MainScreen> {
               children: [
                 _buildLanguageBadge(item['lang']),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: themeColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -690,10 +744,7 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           alignment: Alignment.center,
-          child: const Text(
-            "🐍",
-            style: TextStyle(fontSize: 18),
-          ),
+          child: const Text("🐍", style: TextStyle(fontSize: 18)),
         );
       case 'C++':
         return Container(
@@ -746,10 +797,7 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           alignment: Alignment.center,
-          child: const Text(
-            "☕",
-            style: TextStyle(fontSize: 16),
-          ),
+          child: const Text("☕", style: TextStyle(fontSize: 16)),
         );
       default:
         return const SizedBox(width: 32, height: 32);
@@ -822,11 +870,41 @@ class _MainScreenState extends State<MainScreen> {
                   padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                   child: Row(
                     children: [
-                      Expanded(child: _buildNavItem(0, Icons.home_rounded, Colors.orange)),
-                      Expanded(child: _buildNavItem(1, Icons.menu_book_rounded, Colors.blue)),
-                      Expanded(child: _buildNavItem(2, Icons.sports_esports_rounded, Colors.teal)),
-                      Expanded(child: _buildNavItem(3, Icons.emoji_events_rounded, Colors.orangeAccent)),
-                      Expanded(child: _buildNavItem(4, Icons.person_rounded, Colors.purple)),
+                      Expanded(
+                        child: _buildNavItem(
+                          0,
+                          Icons.home_rounded,
+                          Colors.orange,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildNavItem(
+                          1,
+                          Icons.menu_book_rounded,
+                          Colors.blue,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildNavItem(
+                          2,
+                          Icons.sports_esports_rounded,
+                          Colors.teal,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildNavItem(
+                          3,
+                          Icons.emoji_events_rounded,
+                          Colors.orangeAccent,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildNavItem(
+                          4,
+                          Icons.person_rounded,
+                          Colors.purple,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -862,11 +940,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             duration: const Duration(milliseconds: 250),
             builder: (context, color, child) {
-              return Icon(
-                icon,
-                color: color,
-                size: 28,
-              );
+              return Icon(icon, color: color, size: 28);
             },
           ),
         ),

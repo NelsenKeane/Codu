@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'friend_service.dart';
 
 class UserDataService {
@@ -350,6 +351,9 @@ class UserDataService {
       final List<Map<String, dynamic>> list = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
       for (var item in list) {
         item['lessons'] = 45;
+        if (item['lang'] == 'Phyton') {
+          item['lang'] = 'Python';
+        }
       }
       return list;
     } catch (e) {
@@ -380,6 +384,9 @@ class UserDataService {
       final List<Map<String, dynamic>> list = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
       for (var item in list) {
         item['lessons'] = 45;
+        if (item['lang'] == 'Phyton') {
+          item['lang'] = 'Python';
+        }
       }
       return list;
     } catch (e) {
@@ -407,7 +414,13 @@ class UserDataService {
     }
     try {
       final List<dynamic> decoded = json.decode(jsonStr);
-      return decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      final List<Map<String, dynamic>> list = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+      for (var item in list) {
+        if (item['subject'] == 'Phyton') {
+          item['subject'] = 'Python';
+        }
+      }
+      return list;
     } catch (e) {
       return List<Map<String, dynamic>>.from(_defaultLessons);
     }
@@ -476,7 +489,7 @@ class UserDataService {
   // Complete the current level/lesson for a subject and sync rewards
   Future<void> completeLevel(String subjectName, int levelNumber, int stars) async {
     final history = await getHistory();
-    final dbSubject = subjectName == 'Phyton' ? 'Python' : subjectName;
+    final dbSubject = subjectName;
 
     // Save stars for this level
     await saveLevelStars(dbSubject, levelNumber, stars);
@@ -556,5 +569,103 @@ class UserDataService {
     FriendService().syncUserToFirestore().catchError((e) {
       debugPrint("Failed to sync progress to Firestore: $e");
     });
+  }
+
+  // Sync all user data down from Firestore into SharedPreferences
+  Future<void> syncDataFromFirestore() async {
+    final uid = _uid;
+    if (uid == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (!doc.exists) return;
+
+      final data = doc.data();
+      if (data == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+
+      // Sync streak
+      if (data.containsKey('streak')) {
+        await prefs.setInt('streak_$uid', data['streak'] as int);
+      }
+      // Sync trophies
+      if (data.containsKey('trophies')) {
+        await prefs.setInt('trophies_$uid', data['trophies'] as int);
+      }
+      // Sync avatarIndex
+      if (data.containsKey('avatarIndex')) {
+        await prefs.setInt('avatar_$uid', data['avatarIndex'] as int);
+      }
+      // Sync wins
+      if (data.containsKey('wins')) {
+        await prefs.setInt('wins_$uid', data['wins'] as int);
+      }
+      // Sync losses
+      if (data.containsKey('losses')) {
+        await prefs.setInt('losses_$uid', data['losses'] as int);
+      }
+      // Sync custom display name
+      if (data.containsKey('displayName')) {
+        await prefs.setString('display_name_$uid', data['displayName'] as String);
+      }
+
+      // Sync courses progress (history and level stars)
+      if (data.containsKey('courses')) {
+        final coursesMap = data['courses'] as Map<String, dynamic>?;
+        if (coursesMap != null) {
+          final List<String> subjects = ['Python', 'C++', 'Javascript', 'Java'];
+          final List<Map<String, dynamic>> history = [];
+
+          for (final subject in subjects) {
+            final String docId = subject.toLowerCase();
+            if (coursesMap.containsKey(docId)) {
+              final courseData = coursesMap[docId] as Map<String, dynamic>?;
+              if (courseData != null) {
+                final int completedCount = (courseData['completed'] ?? 0) as int;
+                
+                // Reconstruct history item
+                history.add({
+                  'title': 'Introduction to $subject',
+                  'lessons': 45,
+                  'completed': completedCount,
+                  'status': completedCount == 45 
+                      ? 'Completed' 
+                      : (completedCount > 0 ? 'In Progress' : 'Not Started'),
+                  'lang': subject,
+                });
+
+                // Reconstruct level stars map
+                final levelsData = courseData['levels'] as Map<String, dynamic>?;
+                if (levelsData != null) {
+                  final Map<String, int> starsMap = {};
+                  levelsData.forEach((key, val) {
+                    starsMap[key] = val as int;
+                  });
+                  final String starsJson = json.encode(starsMap);
+                  await prefs.setString('level_stars_${uid}_$subject', starsJson);
+                }
+              }
+            } else {
+              // Add default history item if missing
+              history.add({
+                'title': 'Introduction to $subject',
+                'lessons': 45,
+                'completed': 0,
+                'status': 'Not Started',
+                'lang': subject,
+              });
+            }
+          }
+
+          if (history.isNotEmpty) {
+            await prefs.setString('history_$uid', json.encode(history));
+          }
+        }
+      }
+      debugPrint("Profile progress synced down from Firestore successfully!");
+    } catch (e) {
+      debugPrint("Failed to sync progress down from Firestore: $e");
+    }
   }
 }

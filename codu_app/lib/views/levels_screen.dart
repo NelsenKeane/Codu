@@ -25,11 +25,11 @@ class LevelsScreen extends StatefulWidget {
   static final Map<String, Map<int, int>> starsCache = {};
 
   static Future<void> preloadMaps() async {
-    final subjects = ['Phyton', 'C++', 'Javascript', 'Java'];
+    final subjects = ['Python', 'C++', 'Javascript', 'Java'];
     for (var subject in subjects) {
       String svgPath = '';
       switch (subject) {
-        case 'Phyton':
+        case 'Python':
           svgPath = 'assets/images/Level Map 1.svg';
           break;
         case 'C++':
@@ -50,7 +50,9 @@ class LevelsScreen extends StatefulWidget {
 
         // Extend starting point
         final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
-        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
+        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (
+          match,
+        ) {
           final double x = double.parse(match.group(1)!);
           final double vDistance = double.parse(match.group(2)!);
           final double newVDistance = vDistance + 400.0;
@@ -69,15 +71,21 @@ class LevelsScreen extends StatefulWidget {
         double currentY = 0;
         double w1 = xStart - 211.81;
         double hSegment1 = w1 - 307.92;
-        sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+        sb.write(
+          'v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50',
+        );
         currentY -= 407.92;
 
         bool goRight = true;
         while (currentY > -5000) {
           if (goRight) {
-            sb.write('v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50');
+            sb.write(
+              'v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50',
+            );
           } else {
-            sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+            sb.write(
+              'v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50',
+            );
           }
           currentY -= 407.92;
           goRight = !goRight;
@@ -101,7 +109,10 @@ class LevelsScreen extends StatefulWidget {
         final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
         String cleanedSvg = svgString.replaceAll(styleRegex, '');
 
-        cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
+        cleanedSvg = cleanedSvg.replaceAll(
+          'viewBox="0 0 1080 11000"',
+          'viewBox="0 -5000 1080 16400"',
+        );
 
         cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
           final double x = double.parse(match.group(1)!);
@@ -114,17 +125,23 @@ class LevelsScreen extends StatefulWidget {
 
         cleanedSvg = cleanedSvg.replaceFirst(
           '<use transform="scale(.71)" xlink:href="#image"/>',
-          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
+          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>',
         );
 
         cleanedSvg = cleanedSvg.replaceFirst(
           '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
-          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
+          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"',
         );
 
         String svgContent = cleanedSvg
-            .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
-            .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
+            .replaceAll(
+              'class="st0"',
+              'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"',
+            )
+            .replaceAll(
+              'class="st1"',
+              'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"',
+            );
 
         if (pathMetric != null) {
           svgCache[svgPath] = CachedSvgMapData(
@@ -146,7 +163,7 @@ class LevelsScreen extends StatefulWidget {
         completedCache[lang] = completed;
       }
       for (var subject in subjects) {
-        final dbSubject = subject == 'Phyton' ? 'Python' : subject;
+        final dbSubject = subject == 'Python' ? 'Python' : subject;
         final starsMap = await UserDataService().getLevelStars(dbSubject);
         starsCache[dbSubject] = starsMap;
       }
@@ -159,10 +176,11 @@ class LevelsScreen extends StatefulWidget {
   State<LevelsScreen> createState() => _LevelsScreenState();
 }
 
-class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderStateMixin {
-  String _selectedSubject = 'Phyton'; // Mockup spelling
+class _LevelsScreenState extends State<LevelsScreen>
+    with SingleTickerProviderStateMixin {
+  String _selectedSubject = 'Python'; // Mockup spelling
 
-  final List<String> _subjects = ['Phyton', 'C++', 'Javascript', 'Java'];
+  final List<String> _subjects = ['Python', 'C++', 'Javascript', 'Java'];
 
   int _streak = 0;
   int _trophies = 0;
@@ -186,8 +204,8 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     super.initState();
     if (widget.initialSubject != null) {
       String subject = widget.initialSubject!;
-      if (subject == 'Python') {
-        subject = 'Phyton';
+      if (subject == 'Phyton' || subject == 'Python') {
+        subject = 'Python';
       }
       _selectedSubject = subject;
     }
@@ -197,10 +215,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   @override
   void didUpdateWidget(covariant LevelsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialSubject != null && widget.initialSubject != oldWidget.initialSubject) {
+    if (widget.initialSubject != null &&
+        widget.initialSubject != oldWidget.initialSubject) {
       String subject = widget.initialSubject!;
-      if (subject == 'Python') {
-        subject = 'Phyton';
+      if (subject == 'Phyton' || subject == 'Python') {
+        subject = 'Python';
       }
       setState(() {
         _selectedSubject = subject;
@@ -230,7 +249,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
 
   String _getSvgPath() {
     switch (_selectedSubject) {
-      case 'Phyton':
+      case 'Python':
         return 'assets/images/Level Map 1.svg';
       case 'C++':
         return 'assets/images/Level Map 2.svg';
@@ -257,7 +276,9 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadSvgPath({bool forceReload = false}) async {
-    final dbSubject = _selectedSubject == 'Phyton' ? 'Python' : _selectedSubject;
+    final dbSubject = _selectedSubject == 'Python'
+        ? 'Python'
+        : _selectedSubject;
     String svgPath = _getSvgPath();
 
     // Check synchronous cache path first
@@ -265,7 +286,6 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         LevelsScreen.svgCache.containsKey(svgPath) &&
         LevelsScreen.completedCache.containsKey(dbSubject) &&
         LevelsScreen.starsCache.containsKey(dbSubject)) {
-      
       final cached = LevelsScreen.svgCache[svgPath]!;
       final completed = LevelsScreen.completedCache[dbSubject]!;
       final starsMap = LevelsScreen.starsCache[dbSubject]!;
@@ -310,7 +330,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
       if (subjectProgress.isNotEmpty) {
         completed = subjectProgress['completed'] ?? 0;
       }
-      
+
       setState(() {
         _levelStarsMap = starsMap;
         _activeLevelIndex = completed.clamp(0, 44);
@@ -326,7 +346,9 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
 
         // Extend starting point
         final RegExp pathStartRegex = RegExp(r'd="M([0-9.]+),11000v-([0-9.]+)');
-        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (match) {
+        String modifiedSvgPath = svgString.replaceFirstMapped(pathStartRegex, (
+          match,
+        ) {
           final double x = double.parse(match.group(1)!);
           final double vDistance = double.parse(match.group(2)!);
           final double newVDistance = vDistance + 400.0;
@@ -353,7 +375,10 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         final RegExp styleRegex = RegExp(r'<style>.*?</style>', dotAll: true);
         String cleanedSvg = svgString.replaceAll(styleRegex, '');
 
-        cleanedSvg = cleanedSvg.replaceAll('viewBox="0 0 1080 11000"', 'viewBox="0 -5000 1080 16400"');
+        cleanedSvg = cleanedSvg.replaceAll(
+          'viewBox="0 0 1080 11000"',
+          'viewBox="0 -5000 1080 16400"',
+        );
 
         cleanedSvg = cleanedSvg.replaceFirstMapped(pathStartRegex, (match) {
           final double x = double.parse(match.group(1)!);
@@ -366,17 +391,23 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
 
         cleanedSvg = cleanedSvg.replaceFirst(
           '<use transform="scale(.71)" xlink:href="#image"/>',
-          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>'
+          '<use transform="translate(0 -6453.09) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -4302.06) scale(.71)" xlink:href="#image"/>\n    <use transform="translate(0 -2151.03) scale(.71)" xlink:href="#image"/>\n    <use transform="scale(.71)" xlink:href="#image"/>',
         );
 
         cleanedSvg = cleanedSvg.replaceFirst(
           '<image width="1520" height="352" transform="translate(0 10765.9) scale(.71)"',
-          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"'
+          '<use transform="translate(0 10765.9) scale(.71)" xlink:href="#image"/>\n    <image width="1520" height="352" transform="translate(0 11150) scale(.71)"',
         );
 
         _svgContent = cleanedSvg
-            .replaceAll('class="st0"', 'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"')
-            .replaceAll('class="st1"', 'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"');
+            .replaceAll(
+              'class="st0"',
+              'fill="#ffffff" stroke="#231f20" stroke-miterlimit="10"',
+            )
+            .replaceAll(
+              'class="st1"',
+              'fill="none" stroke="#8dd5e6" stroke-width="150" stroke-miterlimit="10" filter="url(#drop-shadow-1)"',
+            );
 
         _pathMetric = pathMetric;
 
@@ -442,9 +473,20 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
       Tangent? tangent = _pathMetric!.getTangentForOffset(distance);
       if (tangent != null) {
         // Shift y-coordinate by 5000 to match viewBox shift (starts at y = -5000)
-        positions.add(Offset(tangent.position.dx * _scale, (tangent.position.dy + 5000.0) * _scale));
+        positions.add(
+          Offset(
+            tangent.position.dx * _scale,
+            (tangent.position.dy + 5000.0) * _scale,
+          ),
+        );
       } else {
-        positions.add(Offset(screenWidth / 2, (11000.0 - (startOffset + i * (usableLength / 44.0)) + 5000.0) * _scale));
+        positions.add(
+          Offset(
+            screenWidth / 2,
+            (11000.0 - (startOffset + i * (usableLength / 44.0)) + 5000.0) *
+                _scale,
+          ),
+        );
       }
     }
     _nodePositions = positions;
@@ -456,23 +498,23 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     double startOffset = 550.0;
     double endOffset = 1800.0;
     double usableLength = totalLength - startOffset - endOffset;
-    double targetDistance = startOffset + _activeLevelIndex * (usableLength / 44.0);
+    double targetDistance =
+        startOffset + _activeLevelIndex * (usableLength / 44.0);
 
     _animationController?.dispose();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    _animation = Tween<double>(
-      begin: startOffset,
-      end: targetDistance,
-    ).animate(CurvedAnimation(
-      parent: _animationController!,
-      curve: Curves.easeInOutCubic,
-    ))
-      ..addListener(() {
-        setState(() {});
-      });
+    _animation =
+        Tween<double>(begin: startOffset, end: targetDistance).animate(
+          CurvedAnimation(
+            parent: _animationController!,
+            curve: Curves.easeInOutCubic,
+          ),
+        )..addListener(() {
+          setState(() {});
+        });
 
     _animationController!.forward();
 
@@ -482,7 +524,10 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   }
 
   void _scrollToActiveLevel() {
-    if (!mounted || _nodePositions.isEmpty || _activeLevelIndex >= _nodePositions.length) return;
+    if (!mounted ||
+        _nodePositions.isEmpty ||
+        _activeLevelIndex >= _nodePositions.length)
+      return;
     double nodeY = _nodePositions[_activeLevelIndex].dy;
     double targetScroll = nodeY - (MediaQuery.of(context).size.height / 2);
 
@@ -513,16 +558,22 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
     // First Turn: Go Left from xStart to 211.81
     double w1 = xStart - 211.81;
     double hSegment1 = w1 - 307.92;
-    sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+    sb.write(
+      'v-50c0-85.03,-68.93-153.96,-153.96-153.96h-${hSegment1.toStringAsFixed(2)}c-85.03,0,-153.96-68.93,-153.96-153.96v-50',
+    );
     currentY -= 407.92;
 
     // Subsequent turns: wiggle between 211.81 and 869.01 (width 657.2)
     bool goRight = true;
     while (currentY > -5000) {
       if (goRight) {
-        sb.write('v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50');
+        sb.write(
+          'v-50c0-85.03,68.93-153.96,153.96-153.96h349.28c85.03,0,153.96-68.93,153.96-153.96v-50',
+        );
       } else {
-        sb.write('v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50');
+        sb.write(
+          'v-50c0-85.03,-68.93-153.96,-153.96-153.96h-349.28c-85.03,0,-153.96-68.93,-153.96-153.96v-50',
+        );
       }
       currentY -= 407.92;
       goRight = !goRight;
@@ -531,7 +582,9 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   }
 
   void _showStreakDialog() {
-    final TextEditingController controller = TextEditingController(text: _streak.toString());
+    final TextEditingController controller = TextEditingController(
+      text: _streak.toString(),
+    );
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -571,7 +624,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        icon: const Icon(
+                          Icons.remove_circle_outline_rounded,
+                          size: 36,
+                          color: Colors.grey,
+                        ),
                         onPressed: () {
                           int val = int.tryParse(controller.text) ?? 0;
                           if (val > 0) {
@@ -598,7 +655,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                       ),
                       const SizedBox(width: 16),
                       IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 36,
+                          color: Colors.green,
+                        ),
                         onPressed: () {
                           int val = int.tryParse(controller.text) ?? 0;
                           controller.text = (val + 1).toString();
@@ -628,7 +689,10 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                         ),
                         onPressed: () async {
                           int? newStreak = int.tryParse(controller.text);
@@ -660,7 +724,9 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   }
 
   void _showTrophiesDialog() {
-    final TextEditingController controller = TextEditingController(text: _trophies.toString());
+    final TextEditingController controller = TextEditingController(
+      text: _trophies.toString(),
+    );
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -700,7 +766,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 36, color: Colors.grey),
+                        icon: const Icon(
+                          Icons.remove_circle_outline_rounded,
+                          size: 36,
+                          color: Colors.grey,
+                        ),
                         onPressed: () {
                           int val = int.tryParse(controller.text) ?? 0;
                           if (val > 0) {
@@ -727,7 +797,11 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                       ),
                       const SizedBox(width: 16),
                       IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 36, color: Colors.green),
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 36,
+                          color: Colors.green,
+                        ),
                         onPressed: () {
                           int val = int.tryParse(controller.text) ?? 0;
                           controller.text = (val + 1).toString();
@@ -757,7 +831,10 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                         ),
                         onPressed: () async {
                           int? newTrophies = int.tryParse(controller.text);
@@ -791,7 +868,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   // Map subjects to emojis for the dropdown
   String _getSubjectEmoji(String subject) {
     switch (subject) {
-      case 'Phyton':
+      case 'Python':
         return '🐍';
       case 'C++':
         return '🔵';
@@ -879,10 +956,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
             right: 20,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildSubjectDropdown(),
-                _buildStatsRow(),
-              ],
+              children: [_buildSubjectDropdown(), _buildStatsRow()],
             ),
           ),
         ],
@@ -891,7 +965,8 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
   }
 
   Widget _buildAnimatedProgressMarker() {
-    if (_pathMetric == null || _animation == null) return const SizedBox.shrink();
+    if (_pathMetric == null || _animation == null)
+      return const SizedBox.shrink();
 
     double currentDistance = _animation!.value;
     Tangent? tangent = _pathMetric!.getTangentForOffset(currentDistance);
@@ -921,11 +996,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
           ],
         ),
         child: const Center(
-          child: Icon(
-            Icons.person_rounded,
-            color: Colors.white,
-            size: 16,
-          ),
+          child: Icon(Icons.person_rounded, color: Colors.white, size: 16),
         ),
       ),
     );
@@ -1006,9 +1077,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
           _loadSvgPath();
         }
       },
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       offset: const Offset(0, 50),
       itemBuilder: (BuildContext context) {
         return _subjects.map((String subject) {
@@ -1068,11 +1137,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(
-              Icons.arrow_drop_down,
-              color: Colors.white,
-              size: 22,
-            ),
+            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 22),
           ],
         ),
       ),
@@ -1102,10 +1167,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
             ),
             child: Row(
               children: [
-                const Text(
-                  "🔥",
-                  style: TextStyle(fontSize: 16),
-                ),
+                const Text("🔥", style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 6),
                 Text(
                   "$_streak",
@@ -1222,20 +1284,24 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
         child: GestureDetector(
           onTap: () {
             if (isPlayable) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => GameplayScreen(
-                    levelNumber: levelNum,
-                    subject: _selectedSubject,
-                  ),
-                ),
-              ).then((_) {
-                _loadUserData(forceReload: true);
-              });
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(
+                      builder: (context) => GameplayScreen(
+                        levelNumber: levelNum,
+                        subject: _selectedSubject,
+                      ),
+                    ),
+                  )
+                  .then((_) {
+                    _loadUserData(forceReload: true);
+                  });
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text("This level is locked! Complete the previous levels first."),
+                  content: Text(
+                    "This level is locked! Complete the previous levels first.",
+                  ),
                   backgroundColor: Color(0xFFE55353),
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 2),
@@ -1249,9 +1315,7 @@ class _LevelsScreenState extends State<LevelsScreen> with SingleTickerProviderSt
             child: Stack(
               alignment: Alignment.center,
               clipBehavior: Clip.none,
-              children: [
-                nodeChild,
-              ],
+              children: [nodeChild],
             ),
           ),
         ),
@@ -1281,10 +1345,10 @@ class WindingPathPainter extends CustomPainter {
 
     // Apply the scale to the path using a Float64List scale matrix
     final Float64List scaleMatrix = Float64List(16);
-    scaleMatrix[0] = scale;  // sx
-    scaleMatrix[5] = scale;  // sy
-    scaleMatrix[10] = 1.0;   // sz
-    scaleMatrix[15] = 1.0;   // w
+    scaleMatrix[0] = scale; // sx
+    scaleMatrix[5] = scale; // sy
+    scaleMatrix[10] = 1.0; // sz
+    scaleMatrix[15] = 1.0; // w
     final Path scaledPath = extractPath.transform(scaleMatrix);
 
     // Draw the active path highlight ribbon in a premium golden yellow color
@@ -1337,14 +1401,18 @@ class _Duo3dCircleButtonState extends State<Duo3dCircleButton> {
     final double translation = _isPressed ? shadowHeight : 0;
 
     return GestureDetector(
-      onTapDown: widget.onPressed == null ? null : (_) => setState(() => _isPressed = true),
+      onTapDown: widget.onPressed == null
+          ? null
+          : (_) => setState(() => _isPressed = true),
       onTapUp: widget.onPressed == null
           ? null
           : (_) {
               setState(() => _isPressed = false);
               widget.onPressed?.call();
             },
-      onTapCancel: widget.onPressed == null ? null : () => setState(() => _isPressed = false),
+      onTapCancel: widget.onPressed == null
+          ? null
+          : () => setState(() => _isPressed = false),
       child: Container(
         width: widget.size,
         height: widget.size + shadowHeight,
@@ -1386,7 +1454,11 @@ class LevelNodeCompleted extends StatelessWidget {
   final int stars;
   final bool isExam;
 
-  const LevelNodeCompleted({super.key, required this.stars, this.isExam = false});
+  const LevelNodeCompleted({
+    super.key,
+    required this.stars,
+    this.isExam = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1395,62 +1467,70 @@ class LevelNodeCompleted extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         SvgPicture.asset(
-          isExam ? 'assets/images/Exam Completed Level.svg' : 'assets/images/FinishedLevel.svg',
+          isExam
+              ? 'assets/images/Exam Completed Level.svg'
+              : 'assets/images/FinishedLevel.svg',
           width: 72,
           height: 72,
         ),
         // Floating Stars Arc
-        if (!isExam)
-          Positioned(
-            top: -24,
-            child: _buildStarsArc(),
-          ),
+        if (!isExam) Positioned(top: -42, child: _buildStarsArc()),
       ],
     );
   }
 
-  // Draw 3 stars in a slight arc
+  // Draw 3 stars overlapping closer to each other using a Stack
   Widget _buildStarsArc() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // Left Star (rotated, lower)
-        Transform.rotate(
-          angle: -0.25,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Icon(
-              Icons.star_rounded,
-              color: stars >= 1 ? const Color(0xFFFFD56B) : Colors.black.withValues(alpha: 0.25),
-              size: 20,
+    return SizedBox(
+      width: 90,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          // Left Star (rotated, lower)
+          Positioned(
+            left: 2,
+            bottom: 2,
+            child: Transform.rotate(
+              angle: -0.25,
+              child: Icon(
+                Icons.star_rounded,
+                color: stars >= 1
+                    ? const Color(0xFFFFD56B)
+                    : Colors.black.withValues(alpha: 0.25),
+                size: 36,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 2),
-        // Middle Star (centered, higher, larger)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2.0),
-          child: Icon(
-            Icons.star_rounded,
-            color: stars >= 2 ? const Color(0xFFFFD56B) : Colors.black.withValues(alpha: 0.25),
-            size: 26,
-          ),
-        ),
-        const SizedBox(width: 2),
-        // Right Star (rotated, lower)
-        Transform.rotate(
-          angle: 0.25,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Icon(
-              Icons.star_rounded,
-              color: stars >= 3 ? const Color(0xFFFFD56B) : Colors.black.withValues(alpha: 0.25),
-              size: 20,
+          // Right Star (rotated, lower)
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: Transform.rotate(
+              angle: 0.25,
+              child: Icon(
+                Icons.star_rounded,
+                color: stars >= 3
+                    ? const Color(0xFFFFD56B)
+                    : Colors.black.withValues(alpha: 0.25),
+                size: 36,
+              ),
             ),
           ),
-        ),
-      ],
+          // Middle Star (centered, higher, larger - rendered last to be on top)
+          Positioned(
+            bottom: 6,
+            child: Icon(
+              Icons.star_rounded,
+              color: stars >= 2
+                  ? const Color(0xFFFFD56B)
+                  : Colors.black.withValues(alpha: 0.25),
+              size: 48,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1460,7 +1540,11 @@ class LevelNodeActive extends StatelessWidget {
   final int levelNumber;
   final bool isExam;
 
-  const LevelNodeActive({super.key, required this.levelNumber, this.isExam = false});
+  const LevelNodeActive({
+    super.key,
+    required this.levelNumber,
+    this.isExam = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1469,15 +1553,14 @@ class LevelNodeActive extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         SvgPicture.asset(
-          isExam ? 'assets/images/Exam Locked Level.svg' : 'assets/images/CurrentLevel.svg',
+          isExam
+              ? 'assets/images/Exam Locked Level.svg'
+              : 'assets/images/CurrentLevel.svg',
           width: 72,
           height: 72,
         ),
         // Tooltip speech bubble above
-        Positioned(
-          top: -46,
-          child: _buildTooltipBubble(),
-        ),
+        Positioned(top: -46, child: _buildTooltipBubble()),
       ],
     );
   }
@@ -1510,10 +1593,7 @@ class LevelNodeActive extends StatelessWidget {
           ),
         ),
         // Triangle tail pointing down
-        CustomPaint(
-          size: const Size(12, 6),
-          painter: TrianglePainter(),
-        ),
+        CustomPaint(size: const Size(12, 6), painter: TrianglePainter()),
       ],
     );
   }
@@ -1549,7 +1629,9 @@ class LevelNodeLocked extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SvgPicture.asset(
-      isExam ? 'assets/images/Exam Locked Level.svg' : 'assets/images/Locked Level.svg',
+      isExam
+          ? 'assets/images/Exam Locked Level.svg'
+          : 'assets/images/Locked Level.svg',
       width: 72,
       height: 72,
     );
@@ -1568,7 +1650,8 @@ class LevelNodeCrown extends StatelessWidget {
       onPressed: null,
       size: 72,
       child: const Icon(
-        Icons.workspace_premium_rounded, // Best fit for premium crown representation
+        Icons
+            .workspace_premium_rounded, // Best fit for premium crown representation
         color: Colors.white,
         size: 36,
       ),

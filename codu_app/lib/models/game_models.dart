@@ -28,7 +28,7 @@ class CodingQuestion {
 
 class QuestionBank {
   static List<CodingQuestion> getQuestionsForLevel(int levelNumber, String subject) {
-    final String cleanSubject = (subject == 'Phyton' || subject == 'Python') ? 'Python' : subject;
+    final String cleanSubject = subject;
     
     // Seed random generator per level to ensure consistent questions for the same level
     final Random rand = Random(levelNumber * 13 + cleanSubject.hashCode);
@@ -54,7 +54,7 @@ class QuestionBank {
   }
 
   static String getTopicTitle(int levelNumber, String subject) {
-    final String cleanSubject = (subject == 'Phyton' || subject == 'Python') ? 'Python' : subject;
+    final String cleanSubject = subject;
     final int topicIndex = (levelNumber - 1) % 10;
     
     switch (topicIndex) {

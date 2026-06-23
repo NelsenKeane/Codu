@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/audio_service.dart';
 import 'login_screen.dart';
 import 'help_center_screen.dart';
+import 'personal_info_screen.dart';
 
 class SettingsView extends StatelessWidget {
   final VoidCallback onBack;
@@ -175,7 +176,15 @@ class SettingsView extends StatelessWidget {
                         title: "Personal Info",
                         iconColor: const Color(0xFF46B830),
                         iconBgColor: const Color(0xFFE8F8E9),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => PersonalInfoView(
+                                onBack: () => Navigator.of(context).pop(),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const Divider(height: 1, color: Color(0xFFECEFF1)),
                       _buildSettingRow(

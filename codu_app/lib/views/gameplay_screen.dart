@@ -7,6 +7,8 @@ import '../services/user_data_service.dart';
 import '../services/audio_service.dart';
 import '../widgets/duo_3d_button.dart';
 
+import '../models/lesson_content.dart';
+
 class GameplayScreen extends StatefulWidget {
   final int levelNumber;
   final String subject;
@@ -36,17 +38,43 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
   bool _hasChecked = false;
   bool _isCorrect = false;
 
+  // Intro & Mascot Animation states
+  bool _introDone = false;
+  bool _readyPressed = false;
+  late AnimationController _animationController;
+  late Animation<double> _mascotAnimation;
+
   @override
   void initState() {
     super.initState();
     _questions = QuestionBank.getQuestionsForLevel(widget.levelNumber, widget.subject);
     _clearSlots();
     _startTime = DateTime.now();
+
+    // Initialize animation controller for the mascot jump & transition
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _mascotAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOutCubic,
+    );
+    _animationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _introDone = true;
+          _startTime = DateTime.now(); // Actual game play timer starts now
+        });
+      }
+    });
+
     AudioService().playMusic('Audio/Game Music.mp3');
   }
 
   @override
   void dispose() {
+    _animationController.dispose();
     AudioService().stopMusic();
     AudioService().playMusic('Audio/Menu Music.mp3');
     super.dispose();
@@ -68,6 +96,17 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     _hasChecked = false;
   }
 
+  // Choice animation variables
+  final Map<int, GlobalKey> _choiceKeys = {};
+  final Map<String, GlobalKey> _slotKeys = {};
+  final Set<int> _animatingChoices = {};
+  String? _flyingText;
+  Offset? _flyingStart;
+  Offset? _flyingEnd;
+  int? _flyingChoiceIndex;
+  String? _flyingSlotId;
+  bool _isFlyingBack = false;
+
   void _handleChoiceTap(int choiceIndex) {
     if (_hasChecked) return;
 
@@ -82,16 +121,13 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     });
 
     if (alreadyPlacedSlot != null) {
-      // Remove it
-      setState(() {
-        _slotContents[alreadyPlacedSlot!] = null;
-      });
+      _handleSlotTap(alreadyPlacedSlot!, choiceIndex);
     } else {
       // Find the first empty slot
       String? firstEmptySlot;
       for (var line in question.codeLines) {
         for (var segment in line) {
-          if (segment.isSlot && _slotContents[segment.text] == null) {
+          if (segment.isSlot && _slotContents[segment.text] == null && _flyingSlotId != segment.text) {
             firstEmptySlot = segment.text;
             break;
           }
@@ -100,11 +136,68 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
       }
 
       if (firstEmptySlot != null) {
+        final choiceKey = _choiceKeys[choiceIndex];
+        final slotKey = _slotKeys[firstEmptySlot];
+        if (choiceKey != null && slotKey != null) {
+          final RenderBox? choiceBox = choiceKey.currentContext?.findRenderObject() as RenderBox?;
+          final RenderBox? slotBox = slotKey.currentContext?.findRenderObject() as RenderBox?;
+          if (choiceBox != null && slotBox != null) {
+            final choicePos = choiceBox.localToGlobal(Offset.zero);
+            final slotPos = slotBox.localToGlobal(Offset.zero);
+
+            setState(() {
+              _flyingChoiceIndex = choiceIndex;
+              _flyingSlotId = firstEmptySlot;
+              _flyingText = question.choices[choiceIndex];
+              _flyingStart = choicePos;
+              _flyingEnd = slotPos;
+              _isFlyingBack = false;
+              _animatingChoices.add(choiceIndex);
+            });
+            return;
+          }
+        }
+
+        // Fallback: place immediately
         setState(() {
           _slotContents[firstEmptySlot!] = choiceIndex;
         });
       }
     }
+  }
+
+  void _handleSlotTap(String slotId, int choiceIndex) {
+    if (_hasChecked) return;
+
+    final question = _questions[_currentQuestionIndex];
+    final slotKey = _slotKeys[slotId];
+    final choiceKey = _choiceKeys[choiceIndex];
+
+    if (slotKey != null && choiceKey != null) {
+      final RenderBox? slotBox = slotKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? choiceBox = choiceKey.currentContext?.findRenderObject() as RenderBox?;
+      if (slotBox != null && choiceBox != null) {
+        final slotPos = slotBox.localToGlobal(Offset.zero);
+        final choicePos = choiceBox.localToGlobal(Offset.zero);
+
+        setState(() {
+          _slotContents[slotId] = null; // Clear slot instantly to show flying away
+          _flyingChoiceIndex = choiceIndex;
+          _flyingSlotId = slotId;
+          _flyingText = question.choices[choiceIndex];
+          _flyingStart = slotPos;
+          _flyingEnd = choicePos;
+          _isFlyingBack = true;
+          _animatingChoices.add(choiceIndex);
+        });
+        return;
+      }
+    }
+
+    // Fallback: remove instantly
+    setState(() {
+      _slotContents[slotId] = null;
+    });
   }
 
   void _onRunCode() {
@@ -544,6 +637,7 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     final question = _questions[_currentQuestionIndex];
     final progress = (_currentQuestionIndex) / _questions.length;
     final topicTitle = QuestionBank.getTopicTitle(widget.levelNumber, widget.subject);
+    final lessonExplanation = LessonContentRepository.getExplanation(widget.subject, widget.levelNumber);
 
     return PopScope(
       canPop: false,
@@ -555,17 +649,14 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F6),
+        backgroundColor: const Color(0xFF56CCF2),
         body: Stack(
           children: [
             // Soft Background Pattern
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.3,
-                child: SvgPicture.asset(
-                  'assets/images/codu_background_pattern_mobile_soft.svg',
-                  fit: BoxFit.cover,
-                ),
+              child: SvgPicture.asset(
+                'assets/images/codu_background_pattern_mobile_soft.svg',
+                fit: BoxFit.cover,
               ),
             ),
             SafeArea(
@@ -586,75 +677,170 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
                           },
                         ),
                         // Mascot Robot
-                        SvgPicture.asset(
-                          _hasChecked
-                              ? (_isCorrect
-                                  ? 'assets/images/CoduExpression/codu YEY.svg'
-                                  : 'assets/images/CoduExpression/codu sad.svg')
-                              : 'assets/images/CoduExpression/codu hi.svg',
-                          width: 44,
-                          height: 44,
-                        ),
+                        _introDone
+                            ? TweenAnimationBuilder<double>(
+                                key: ValueKey('mascot_scale_$_currentQuestionIndex-$_hasChecked'),
+                                tween: Tween<double>(
+                                  begin: 1.0,
+                                  end: _hasChecked ? 1.4 : 1.0,
+                                ),
+                                duration: const Duration(milliseconds: 600),
+                                curve: Curves.elasticOut,
+                                builder: (context, scale, child) {
+                                  return Transform.scale(
+                                    scale: scale,
+                                    child: child,
+                                  );
+                                },
+                                child: SvgPicture.asset(
+                                  _hasChecked
+                                      ? (_isCorrect
+                                          ? 'assets/images/CoduExpression/codu YEY.svg'
+                                          : 'assets/images/CoduExpression/codu sad.svg')
+                                      : 'assets/images/CoduExpression/codu hi.svg',
+                                  width: 44,
+                                  height: 44,
+                                ),
+                              )
+                            : const SizedBox(width: 44, height: 44), // Placeholder during animation
                         const SizedBox(width: 10),
                         // Progress Bar & Level Info
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Progress bar container
-                              Container(
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFFE0E4EC), width: 1.5),
-                                ),
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    return Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 300),
-                                        width: constraints.maxWidth * progress,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFB020),
-                                          borderRadius: BorderRadius.circular(6),
+                          child: _hasChecked
+                              ? Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TweenAnimationBuilder<double>(
+                                    key: ValueKey('bubble_$_currentQuestionIndex-$_hasChecked'),
+                                    tween: Tween<double>(begin: 0.0, end: 1.0),
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.elasticOut,
+                                    builder: (context, scale, child) {
+                                      final bubbleColor = _isCorrect ? const Color(0xFFE8F7FF) : const Color(0xFFFDECEE);
+                                      final borderColor = _isCorrect ? const Color(0xFFB3E5FC) : const Color(0xFFF8BBD0);
+                                      final textColor = _isCorrect ? const Color(0xFF0288D1) : const Color(0xFFE55353);
+                                      final text = _isCorrect ? "EXCELLENT! 🚀" : "TRY AGAIN! 🧩";
+
+                                      return Transform.scale(
+                                        scale: scale,
+                                        alignment: const Alignment(-1.0, 0.0), // pivot left towards the mascot
+                                        child: Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            // Speech bubble body
+                                            Container(
+                                              margin: const EdgeInsets.only(left: 12),
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: bubbleColor,
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(color: borderColor, width: 2),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black.withValues(alpha: 0.05),
+                                                    blurRadius: 4,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Text(
+                                                text,
+                                                style: GoogleFonts.nunito(
+                                                  color: textColor,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                            // Speech bubble pointing tail pointing left towards the mascot
+                                            Positioned(
+                                              left: 4,
+                                              top: 10,
+                                              child: CustomPaint(
+                                                painter: BubbleTailPainter(color: bubbleColor, borderColor: borderColor),
+                                                size: const Size(10, 12),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : AnimatedBuilder(
+                                  animation: _mascotAnimation,
+                                  builder: (context, child) {
+                                    return Opacity(
+                                      opacity: _introDone ? 1.0 : _mascotAnimation.value,
+                                      child: child,
                                     );
                                   },
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Progress bar container
+                                      Container(
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFFE0E4EC), width: 1.5),
+                                        ),
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            return Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 300),
+                                                width: constraints.maxWidth * progress,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFFB020),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Level ${widget.levelNumber} - $topicTitle",
+                                        style: GoogleFonts.nunito(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: const Color(0xFF5A6B7C),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Hearts counter
+                        AnimatedBuilder(
+                          animation: _mascotAnimation,
+                          builder: (context, child) {
+                            return Opacity(
+                              opacity: _introDone ? 1.0 : _mascotAnimation.value,
+                              child: child,
+                            );
+                          },
+                          child: Row(
+                            children: [
+                              const Text(
+                                "❤️",
+                                style: TextStyle(fontSize: 20),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(width: 4),
                               Text(
-                                "Level ${widget.levelNumber} - $topicTitle",
+                                "$_hearts",
                                 style: GoogleFonts.nunito(
-                                  fontSize: 12,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF5A6B7C),
+                                  color: const Color(0xFFE55353),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Hearts counter
-                        Row(
-                          children: [
-                            const Text(
-                              "❤️",
-                              style: TextStyle(fontSize: 20),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$_hearts",
-                              style: GoogleFonts.nunito(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFFE55353),
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
@@ -662,108 +848,395 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
 
                   // --- MAIN EXERCISE PANEL ---
                   Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          // Question Card
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  question.instruction,
-                                  style: GoogleFonts.nunito(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF2C3E50),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-
-                                // Code Workspace
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(16.0),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEFEFEF),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: _hasChecked && !_isCorrect
-                                        ? Border.all(color: const Color(0xFFE55353), width: 2)
-                                        : null,
-                                    boxShadow: _hasChecked && !_isCorrect
-                                        ? [
-                                            BoxShadow(
-                                              color: const Color(0xFFE55353).withValues(alpha: 0.15),
-                                              blurRadius: 12,
-                                              spreadRadius: 2,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  child: _buildCodeLines(question),
-                                ),
-                              ],
-                            ),
+                    child: AnimatedBuilder(
+                      animation: _mascotAnimation,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: _introDone ? 1.0 : _mascotAnimation.value,
+                          child: IgnorePointer(
+                            ignoring: !_introDone,
+                            child: child,
                           ),
+                        );
+                      },
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            // Question Card
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeInOut,
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(20.0),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: _hasChecked
+                                    ? (_isCorrect
+                                        ? Border.all(color: const Color(0xFF58CC02), width: 3)
+                                        : Border.all(color: const Color(0xFFE55353), width: 3))
+                                    : Border.all(color: Colors.transparent, width: 3),
+                                boxShadow: [
+                                  if (_hasChecked && _isCorrect)
+                                    BoxShadow(
+                                      color: const Color(0xFF58CC02).withValues(alpha: 0.35),
+                                      blurRadius: 15,
+                                      spreadRadius: 3,
+                                    )
+                                  else if (_hasChecked && !_isCorrect)
+                                    BoxShadow(
+                                      color: const Color(0xFFE55353).withValues(alpha: 0.35),
+                                      blurRadius: 15,
+                                      spreadRadius: 3,
+                                    )
+                                  else
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    question.instruction,
+                                    style: GoogleFonts.nunito(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: const Color(0xFF2C3E50),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
 
-                          const SizedBox(height: 32),
+                                  // Code Workspace
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(16.0),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFEFEF),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: _hasChecked && !_isCorrect
+                                          ? Border.all(color: const Color(0xFFE55353), width: 2)
+                                          : null,
+                                      boxShadow: _hasChecked && !_isCorrect
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(0xFFE55353).withValues(alpha: 0.15),
+                                                blurRadius: 12,
+                                                spreadRadius: 2,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    child: _buildCodeLines(question),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                          // Palette Choices
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.center,
-                            children: List.generate(question.choices.length, (index) {
-                              final choice = question.choices[index];
-                              
-                              // Check if this choice index has been placed in a slot
-                              bool isAlreadyPlaced = false;
-                              _slotContents.forEach((key, value) {
-                                if (value == index) isAlreadyPlaced = true;
-                              });
+                            const SizedBox(height: 32),
 
-                              return Draggable<int>(
-                                data: index,
-                                feedback: Material(
-                                  color: Colors.transparent,
-                                  child: _buildChoiceChip(choice, isDragging: true),
-                                ),
-                                childWhenDragging: Opacity(
-                                  opacity: 0.3,
-                                  child: _buildChoiceChip(choice, isPlaced: true),
-                                ),
-                                child: GestureDetector(
-                                  onTap: () => _handleChoiceTap(index),
-                                  child: _buildChoiceChip(choice, isPlaced: isAlreadyPlaced),
-                                ),
-                              );
-                            }),
-                          ),
-                        ],
+                            // Palette Choices
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 12,
+                              alignment: WrapAlignment.center,
+                              children: List.generate(question.choices.length, (index) {
+                                final choice = question.choices[index];
+                                
+                                // Check if this choice index has been placed in a slot
+                                bool isAlreadyPlaced = false;
+                                _slotContents.forEach((key, value) {
+                                  if (value == index) isAlreadyPlaced = true;
+                                });
+                                final bool isAnimating = _animatingChoices.contains(index);
+
+                                return Draggable<int>(
+                                  data: index,
+                                  feedback: Material(
+                                    color: Colors.transparent,
+                                    child: _buildChoiceChip(choice, isDragging: true),
+                                  ),
+                                  childWhenDragging: Opacity(
+                                    opacity: 0.0,
+                                    child: _buildChoiceChip(choice, isPlaced: true),
+                                  ),
+                                  child: Opacity(
+                                    opacity: isAnimating ? 0.0 : 1.0,
+                                    child: GestureDetector(
+                                      key: _choiceKeys.putIfAbsent(index, () => GlobalKey()),
+                                      onTap: () => _handleChoiceTap(index),
+                                      child: _buildChoiceChip(choice, isPlaced: isAlreadyPlaced),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
 
                   // --- BOTTOM EVALUATION BAR ---
-                  _buildBottomActionBar(),
+                  AnimatedBuilder(
+                    animation: _mascotAnimation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _introDone ? 1.0 : _mascotAnimation.value,
+                        child: IgnorePointer(
+                          ignoring: !_introDone,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: _buildBottomActionBar(),
+                  ),
                 ],
               ),
             ),
+
+            // --- INTRO COURSE PANEL & MASCOT JUMP ANIMATION ---
+            if (!_introDone) ...[
+              // Intro Course Explanation Panel overlay
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _mascotAnimation,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: (1.0 - _mascotAnimation.value).clamp(0.0, 1.0),
+                      child: IgnorePointer(
+                        ignoring: _readyPressed,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 56), // spacer for back button row
+                          const SizedBox(height: 120), // spacer for the large mascot
+
+                          // Lesson Explanation Card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24.0),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Inline Assistant Banner
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE8F7FF),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFB3E5FC), width: 1.5),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Text("🤖", style: TextStyle(fontSize: 20)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          "Hi! I'm Codu. Let's review this lesson before we start!",
+                                          style: GoogleFonts.nunito(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w900,
+                                            color: const Color(0xFF0288D1),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                
+                                Text(
+                                  lessonExplanation.title,
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: const Color(0xFF1E2A38),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  lessonExplanation.description,
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF5A6B7C),
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+
+                                // Terminal block for code example
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16.0),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E2A38),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+                                          const SizedBox(width: 4),
+                                          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
+                                          const SizedBox(width: 4),
+                                          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Example Syntax",
+                                            style: GoogleFonts.nunito(
+                                              color: const Color(0xFF9AAEC4),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        lessonExplanation.codeExample,
+                                        style: GoogleFonts.firaCode(
+                                          color: const Color(0xFF4AC4FF),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+
+                          // Ready button
+                          Duo3dButton(
+                            faceColor: const Color(0xFFFFB020),
+                            shadowColor: const Color(0xFFD48C00),
+                            height: 52,
+                            onPressed: () {
+                              setState(() {
+                                _readyPressed = true;
+                              });
+                              AudioService().playSfx('Audio/Correct.mp3');
+                              _animationController.forward();
+                            },
+                            child: Text(
+                              "I'm Ready!",
+                              style: GoogleFonts.nunito(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Animating Mascot Overlay
+              AnimatedBuilder(
+                animation: _mascotAnimation,
+                builder: (context, child) {
+                  final size = MediaQuery.of(context).size;
+                  final screenWidth = size.width;
+                  final statusBarHeight = MediaQuery.of(context).padding.top;
+
+                  // Center position (placed higher up to prevent card overlap)
+                  final double initialWidth = 130.0;
+                  final double initialHeight = 130.0;
+                  final double initialLeft = (screenWidth - initialWidth) / 2;
+                  final double initialTop = statusBarHeight + 56.0 + 10.0; // Perfect vertical position above the card
+
+                  // Target corner position (matching row spacing)
+                  final double targetWidth = 44.0;
+                  final double targetHeight = 44.0;
+                  final double targetLeft = 16.0 + 48.0;
+                  final double targetTop = statusBarHeight + 8.0 + 2.0;
+
+                  final double t = _mascotAnimation.value;
+
+                  // Parabolic arc for physical jump feeling!
+                  // It arches up by max 80 pixels in the middle (t = 0.5)
+                  final double jumpArc = -80.0 * sin(pi * t);
+
+                  final double currentLeft = initialLeft + (targetLeft - initialLeft) * t;
+                  final double currentTop = initialTop + (targetTop - initialTop) * t + jumpArc;
+                  final double currentWidth = initialWidth + (targetWidth - initialWidth) * t;
+                  final double currentHeight = initialHeight + (targetHeight - initialHeight) * t;
+
+                  return Positioned(
+                    left: currentLeft,
+                    top: currentTop,
+                    width: currentWidth,
+                    height: currentHeight,
+                    child: SvgPicture.asset(
+                      lessonExplanation.mascotExpression,
+                    ),
+                  );
+                },
+              ),
+            ],
+            if (_flyingText != null && _flyingStart != null && _flyingEnd != null)
+              TweenAnimationBuilder<double>(
+                key: ValueKey('$_flyingChoiceIndex-$_flyingSlotId-$_isFlyingBack'),
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutQuad,
+                onEnd: () {
+                  setState(() {
+                    if (!_isFlyingBack) {
+                      _slotContents[_flyingSlotId!] = _flyingChoiceIndex;
+                    }
+                    _animatingChoices.remove(_flyingChoiceIndex);
+                    _flyingText = null;
+                    _flyingStart = null;
+                    _flyingEnd = null;
+                    _flyingChoiceIndex = null;
+                    _flyingSlotId = null;
+                  });
+                },
+                builder: (context, value, child) {
+                  final currentPos = Offset.lerp(_flyingStart, _flyingEnd, value)!;
+                  return Positioned(
+                    left: currentPos.dx,
+                    top: currentPos.dy,
+                    child: IgnorePointer(
+                      child: _buildChoiceChip(_flyingText!, isSlottedStyle: true),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -905,8 +1378,10 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     final int? placedIndex = _slotContents[slotId];
     final question = _questions[_currentQuestionIndex];
     final bool isIncorrect = _hasChecked && _incorrectSlots.contains(slotId);
+    final key = _slotKeys.putIfAbsent(slotId, () => GlobalKey());
 
     return DragTarget<int>(
+      key: key,
       builder: (context, candidateData, rejectedData) {
         if (placedIndex != null) {
           final String placedValue = question.choices[placedIndex];
@@ -914,9 +1389,7 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
           return GestureDetector(
             onTap: () {
               if (_hasChecked) return;
-              setState(() {
-                _slotContents[slotId] = null;
-              });
+              _handleSlotTap(slotId, placedIndex);
             },
             child: _buildChoiceChip(placedValue, isSlottedStyle: true, isIncorrect: isIncorrect),
           );
@@ -1054,10 +1527,7 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE0E4EC), width: 1.5)),
-        ),
+        color: Colors.transparent,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -1094,10 +1564,7 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE0E4EC), width: 1.5)),
-        ),
+        color: Colors.transparent,
         child: Center(
           child: SizedBox(
             width: 260,
@@ -1135,52 +1602,35 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
         ),
       );
     } else {
-      // Correct answer state -> original green sliding-up panel
-      final Color barBgColor = const Color(0xFFD6F6E6);
-      final Color textColor = const Color(0xFF0F9F59);
-      final String headerText = "EXCELLENT!";
-
+      // Correct answer state -> Clean simple action panel
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: barBgColor,
-          border: Border(top: BorderSide(color: textColor.withValues(alpha: 0.3), width: 1.5)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        color: Colors.transparent,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.check_circle_rounded,
-                  color: textColor,
-                  size: 26,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  headerText,
-                  style: GoogleFonts.nunito(
-                    color: textColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Duo3dButton(
-              faceColor: textColor,
-              shadowColor: const Color(0xFF0C8A4C),
-              height: 50,
-              onPressed: _onContinue,
-              child: Text(
-                "CONTINUE",
-                style: GoogleFonts.nunito(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
+            SizedBox(
+              width: 145,
+              child: Duo3dButton(
+                faceColor: const Color(0xFF58CC02),
+                shadowColor: const Color(0xFF439E00),
+                height: 48,
+                onPressed: _onContinue,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Continue",
+                      style: GoogleFonts.nunito(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1671,4 +2121,41 @@ class SpeechBubblePainter extends CustomPainter {
         oldDelegate.fillColor != fillColor ||
         oldDelegate.borderColor != borderColor;
   }
+}
+
+class BubbleTailPainter extends CustomPainter {
+  final Color color;
+  final Color borderColor;
+
+  BubbleTailPainter({required this.color, required this.borderColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    // Triangle tail pointing left
+    path.moveTo(size.width, 0);
+    path.lineTo(0, size.height / 2);
+    path.lineTo(size.width, size.height);
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    final borderPath = Path();
+    borderPath.moveTo(size.width, 0);
+    borderPath.lineTo(0, size.height / 2);
+    borderPath.lineTo(size.width, size.height);
+    canvas.drawPath(borderPath, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
