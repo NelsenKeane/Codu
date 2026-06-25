@@ -198,6 +198,25 @@ class _LevelsScreenState extends State<LevelsScreen>
   String _svgContent = '';
   int _activeLevelIndex = 2; // Will be calculated from DB progress
   Map<int, int> _levelStarsMap = {};
+  int _avatarIndex = 0;
+
+  final List<Map<String, dynamic>> _avatars = [
+    {'svgPath': 'assets/images/Characters/Female1.svg', 'bgColor': const Color(0xFFFFD56B), 'name': 'Female 1'},
+    {'svgPath': 'assets/images/Characters/Female2.svg', 'bgColor': const Color(0xFF8F93EA), 'name': 'Female 2'},
+    {'svgPath': 'assets/images/Characters/Female3.svg', 'bgColor': const Color(0xFFFF8B8B), 'name': 'Female 3'},
+    {'svgPath': 'assets/images/Characters/Male1.svg', 'bgColor': const Color(0xFFFFC5A5), 'name': 'Male 1'},
+    {'svgPath': 'assets/images/Characters/Male2.svg', 'bgColor': const Color(0xFF7A9EFF), 'name': 'Male 2'},
+    {'svgPath': 'assets/images/Characters/Male3.svg', 'bgColor': const Color(0xFF8CEEAD), 'name': 'Male 3'},
+  ];
+
+  int get _totalEarnedStars {
+    int total = 0;
+    for (int i = 0; i < _activeLevelIndex; i++) {
+      int levelNum = i + 1;
+      total += _levelStarsMap[levelNum] ?? 3;
+    }
+    return total;
+  }
 
   @override
   void initState() {
@@ -238,10 +257,12 @@ class _LevelsScreenState extends State<LevelsScreen>
   Future<void> _loadUserData({bool forceReload = false}) async {
     final streak = await UserDataService().getStreak();
     final trophies = await UserDataService().getTrophies();
+    final avatarIndex = await UserDataService().getAvatarIndex();
     if (mounted) {
       setState(() {
         _streak = streak;
         _trophies = trophies;
+        _avatarIndex = avatarIndex;
       });
       await _loadSvgPath(forceReload: forceReload);
     }
@@ -526,8 +547,9 @@ class _LevelsScreenState extends State<LevelsScreen>
   void _scrollToActiveLevel() {
     if (!mounted ||
         _nodePositions.isEmpty ||
-        _activeLevelIndex >= _nodePositions.length)
+        _activeLevelIndex >= _nodePositions.length) {
       return;
+    }
     double nodeY = _nodePositions[_activeLevelIndex].dy;
     double targetScroll = nodeY - (MediaQuery.of(context).size.height / 2);
 
@@ -965,8 +987,9 @@ class _LevelsScreenState extends State<LevelsScreen>
   }
 
   Widget _buildAnimatedProgressMarker() {
-    if (_pathMetric == null || _animation == null)
+    if (_pathMetric == null || _animation == null) {
       return const SizedBox.shrink();
+    }
 
     double currentDistance = _animation!.value;
     Tangent? tangent = _pathMetric!.getTangentForOffset(currentDistance);
@@ -974,7 +997,9 @@ class _LevelsScreenState extends State<LevelsScreen>
 
     double markerX = tangent.position.dx * _scale;
     double markerY = (tangent.position.dy + 5000.0) * _scale;
-    const double markerSize = 36.0;
+    const double markerSize = 48.0;
+
+    final avatar = _avatars[_avatarIndex.clamp(0, _avatars.length - 1)];
 
     return Positioned(
       left: markerX - (markerSize / 2),
@@ -983,9 +1008,9 @@ class _LevelsScreenState extends State<LevelsScreen>
         width: markerSize,
         height: markerSize,
         decoration: BoxDecoration(
-          color: const Color(0xFFFFB020),
+          color: avatar['bgColor'],
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 3.5),
+          border: Border.all(color: Colors.white, width: 3.0),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.25),
@@ -995,8 +1020,11 @@ class _LevelsScreenState extends State<LevelsScreen>
             ),
           ],
         ),
-        child: const Center(
-          child: Icon(Icons.person_rounded, color: Colors.white, size: 16),
+        child: ClipOval(
+          child: SvgPicture.asset(
+            avatar['svgPath'],
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );
@@ -1208,7 +1236,7 @@ class _LevelsScreenState extends State<LevelsScreen>
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  "$_trophies",
+                  "$_totalEarnedStars/135",
                   style: GoogleFonts.nunito(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -1536,7 +1564,7 @@ class LevelNodeCompleted extends StatelessWidget {
 }
 
 // 2. Active Node (Yellow circle with white star inside, white "Level 3" tooltip bubble above)
-class LevelNodeActive extends StatelessWidget {
+class LevelNodeActive extends StatefulWidget {
   final int levelNumber;
   final bool isExam;
 
@@ -1547,21 +1575,55 @@ class LevelNodeActive extends StatelessWidget {
   });
 
   @override
+  State<LevelNodeActive> createState() => _LevelNodeActiveState();
+}
+
+class _LevelNodeActiveState extends State<LevelNodeActive> with SingleTickerProviderStateMixin {
+  late AnimationController _bobController;
+  late Animation<double> _bobAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _bobController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _bobAnimation = Tween<double>(begin: 0.0, end: -8.0).animate(
+      CurvedAnimation(parent: _bobController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bobController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      clipBehavior: Clip.none,
-      children: [
-        SvgPicture.asset(
-          isExam
-              ? 'assets/images/Exam Locked Level.svg'
-              : 'assets/images/CurrentLevel.svg',
-          width: 72,
-          height: 72,
-        ),
-        // Tooltip speech bubble above
-        Positioned(top: -46, child: _buildTooltipBubble()),
-      ],
+    return AnimatedBuilder(
+      animation: _bobAnimation,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            SvgPicture.asset(
+              widget.isExam
+                  ? 'assets/images/Exam Locked Level.svg'
+                  : 'assets/images/CurrentLevel.svg',
+              width: 72,
+              height: 72,
+            ),
+            // Tooltip speech bubble above
+            Positioned(
+              top: -56 + _bobAnimation.value,
+              child: _buildTooltipBubble(),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1571,10 +1633,10 @@ class LevelNodeActive extends StatelessWidget {
       children: [
         // The bubble container
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.15),
@@ -1584,16 +1646,16 @@ class LevelNodeActive extends StatelessWidget {
             ],
           ),
           child: Text(
-            isExam ? "Exam" : "Level $levelNumber",
+            widget.isExam ? "Exam" : "Level ${widget.levelNumber}",
             style: GoogleFonts.nunito(
               color: Colors.black,
               fontWeight: FontWeight.w900,
-              fontSize: 13,
+              fontSize: 18,
             ),
           ),
         ),
         // Triangle tail pointing down
-        CustomPaint(size: const Size(12, 6), painter: TrianglePainter()),
+        CustomPaint(size: const Size(14, 8), painter: TrianglePainter()),
       ],
     );
   }

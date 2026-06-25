@@ -274,11 +274,11 @@ class _GameplayScreenState extends State<GameplayScreen> with SingleTickerProvid
     AudioService().playSfx('Audio/Completed.mp3');
 
     int earnedStars = 3;
-    if (_mistakesCount == 0) {
+    if (_hearts == 4) {
       earnedStars = 3;
-    } else if (_mistakesCount == 1) {
+    } else if (_hearts == 2 || _hearts == 3) {
       earnedStars = 2;
-    } else {
+    } else if (_hearts == 1) {
       earnedStars = 1;
     }
 

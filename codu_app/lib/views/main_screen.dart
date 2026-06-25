@@ -203,7 +203,10 @@ class _MainScreenState extends State<MainScreen> {
 
     final List<Widget> screens = [
       _buildHomeDashboard(statusBarHeight),
-      LevelsScreen(initialSubject: _selectedSubjectForLevels),
+      LevelsScreen(
+        key: ValueKey('levels_screen_${_selectedNavIndex == 1}'),
+        initialSubject: _selectedSubjectForLevels,
+      ),
       DuelScreen(
         onShowBottomBarChanged: (show) {
           if (mounted) {
